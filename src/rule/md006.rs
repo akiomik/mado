@@ -1,9 +1,12 @@
-use comrak::nodes::{ListType, NodeList, NodeValue};
+use comrak::nodes::{AstNode, ListType, NodeList, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeValueMatcher},
+    NewRuleLike, NodeRule, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -61,6 +64,40 @@ impl RuleLike for MD006 {
         }
 
         Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD006 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD006",
+            description: "Consider starting bulleted lists at the beginning of the line",
+            tags: vec!["bullet", "ul", "indentation"],
+            aliases: vec!["ul-start-left"],
+        }
+    }
+}
+
+impl NodeRule for MD006 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|value| {
+            matches!(
+                value,
+                NodeValue::Item(NodeList { marker_offset, .. }) if *marker_offset > 0
+            )
+        })
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        if let Some(list_level) = ctx.list_level {
+            if list_level == 1 {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(ctx.path.clone(), position);
+                return Ok(vec![violation]);
+            }
+        }
+
+        Ok(vec![])
     }
 }
 
