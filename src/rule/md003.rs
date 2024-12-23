@@ -1,11 +1,19 @@
-use comrak::nodes::{NodeHeading, NodeValue};
+use comrak::nodes::{AstNode, NodeHeading, NodeValue};
 use miette::Result;
 use serde::Deserialize;
 
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
+pub struct State {
+    seen_heading_style: Option<bool>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -22,6 +30,7 @@ pub enum HeadingStyle {
 #[non_exhaustive]
 pub struct MD003 {
     style: HeadingStyle,
+    state: State,
 }
 
 impl MD003 {
@@ -30,7 +39,10 @@ impl MD003 {
     #[inline]
     #[must_use]
     pub fn new(style: HeadingStyle) -> Self {
-        Self { style }
+        Self {
+            style,
+            state: State::default(),
+        }
     }
 }
 
@@ -39,6 +51,7 @@ impl Default for MD003 {
     fn default() -> Self {
         Self {
             style: Self::DEFAULT_HEADING_STYLE,
+            state: State::default(),
         }
     }
 }
@@ -89,6 +102,49 @@ impl RuleLike for MD003 {
                 if maybe_heading_style.is_none() {
                     maybe_heading_style = Some(setext);
                 }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD003 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD003",
+            description: "Header style",
+            tags: vec!["headers"],
+            aliases: vec!["header-style"],
+        }
+    }
+}
+
+impl NodeRule for MD003 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let NodeValue::Heading(NodeHeading { level, setext, .. }) = node.data.borrow().value {
+            let is_violated = match (&self.style, self.state.seen_heading_style) {
+                (HeadingStyle::Consistent, Some(heading_style)) => setext != heading_style,
+                (HeadingStyle::Atx, _) => setext,
+                (HeadingStyle::Setext, _) => !setext,
+                (HeadingStyle::SetextWithAtx, _) => level < 3 && !setext,
+                _ => false,
+            };
+
+            if is_violated {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(ctx.path.clone(), position);
+                violations.push(violation);
+            }
+
+            if self.state.seen_heading_style.is_none() {
+                self.state.seen_heading_style = Some(setext);
             }
         }
 
