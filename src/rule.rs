@@ -1,16 +1,15 @@
 use std::path::PathBuf;
 
-use comrak::nodes::{AstNode, Sourcepos};
+use comrak::nodes::Sourcepos;
+use line::LineRule;
 use miette::Result;
+use node::NodeRule;
 use serde::Deserialize;
 
-use crate::{
-    matcher::{LineMatcher, NodeValueMatcher},
-    violation::Violation,
-    Document,
-};
+use crate::{violation::Violation, Document};
 
 mod helper;
+pub mod line;
 mod md001;
 mod md002;
 pub mod md003;
@@ -47,6 +46,7 @@ mod md040;
 mod md041;
 pub mod md046;
 mod md047;
+pub mod node;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[non_exhaustive]
@@ -112,34 +112,9 @@ pub trait RuleLike: Send {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeContext {
-    pub path: PathBuf,
-    pub level: usize,
-    pub list_level: Option<usize>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LineContext {
-    pub path: PathBuf,
-    pub lineno: usize,
-}
-
 pub enum RuleType {
     Node(Box<dyn NodeRule>),
     Line(Box<dyn LineRule>),
-}
-
-pub trait NodeRule: Send {
-    fn matcher(&self) -> NodeValueMatcher;
-
-    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;
-}
-
-pub trait LineRule: Send {
-    fn matcher(&self) -> LineMatcher;
-
-    fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>>;
 }
 
 pub use md001::MD001;

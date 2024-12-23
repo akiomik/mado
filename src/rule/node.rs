@@ -1,4 +1,9 @@
+use std::path::PathBuf;
+
 use comrak::nodes::{AstNode, NodeValue};
+use miette::Result;
+
+use crate::Violation;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeValueMatcher {
@@ -18,18 +23,14 @@ impl NodeValueMatcher {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LineMatcher {
-    pred: fn(&str) -> bool,
+pub struct NodeContext {
+    pub path: PathBuf,
+    pub level: usize,
+    pub list_level: Option<usize>,
 }
 
-impl LineMatcher {
-    #[inline]
-    pub fn new(pred: fn(&str) -> bool) -> Self {
-        Self { pred }
-    }
+pub trait NodeRule: Send {
+    fn matcher(&self) -> NodeValueMatcher;
 
-    #[inline]
-    pub fn is_match<'a>(&self, line: &str) -> bool {
-        (self.pred)(line)
-    }
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;
 }

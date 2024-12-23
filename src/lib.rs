@@ -6,7 +6,6 @@ pub mod collection;
 pub mod command;
 pub mod config;
 mod document;
-pub mod matcher;
 mod output;
 pub mod rule;
 pub mod service;
