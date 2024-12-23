@@ -6,7 +6,10 @@ use regex::Regex;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    line::{LineContext, LineMatcher, LineRule},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -71,6 +74,41 @@ impl RuleLike for MD013 {
                 let violation = self.to_violation(doc.path.clone(), position);
                 violations.push(violation);
             }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD013 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD013",
+            description: "Line length",
+            tags: vec!["line_length"],
+            aliases: vec!["line-length"],
+        }
+    }
+}
+
+impl LineRule for MD013 {
+    fn matcher(&self) -> LineMatcher {
+        LineMatcher::new(|_line| true)
+    }
+
+    fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>> {
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r".*\s").unwrap()
+        });
+
+        let mut violations = vec![];
+
+        if line.len() > self.line_length && RE.is_match_at(line, self.line_length) {
+            let position =
+                Sourcepos::from((ctx.lineno, self.line_length + 1, ctx.lineno, line.len()));
+            let violation = self.to_violation(ctx.path.clone(), position);
+            violations.push(violation);
         }
 
         Ok(violations)
