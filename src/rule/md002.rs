@@ -1,15 +1,25 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct State {
+    header_seen: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD002 {
     pub level: u8,
+    pub state: State,
 }
 
 impl MD002 {
@@ -18,7 +28,10 @@ impl MD002 {
     #[inline]
     #[must_use]
     pub fn new(level: u8) -> Self {
-        Self { level }
+        Self {
+            level,
+            state: State::default(),
+        }
     }
 }
 
@@ -27,6 +40,7 @@ impl Default for MD002 {
     fn default() -> Self {
         Self {
             level: Self::DEFAULT_LEVEL,
+            state: State::default(),
         }
     }
 }
@@ -68,6 +82,38 @@ impl RuleLike for MD002 {
         }
 
         Ok(vec![])
+    }
+}
+
+impl NewRuleLike for MD002 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD002",
+            description: "First header should be a top level header",
+            tags: vec!["headers"],
+            aliases: vec!["first-header-h1"],
+        }
+    }
+}
+
+impl NodeRule for MD002 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+        if let NodeValue::Heading(heading) = node.data.borrow().value {
+            if heading.level != self.level {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(ctx.path.clone(), position);
+                violations.push(violation);
+            }
+
+            self.state.header_seen = true;
+        }
+
+        return Ok(violations);
     }
 }
 
