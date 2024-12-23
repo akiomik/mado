@@ -1,9 +1,12 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -50,6 +53,37 @@ impl RuleLike for MD014 {
                     let violation = self.to_violation(doc.path.clone(), position);
                     violations.push(violation);
                 }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD014 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD014",
+            description: "Dollar signs used before commands without showing output",
+            tags: vec!["code"],
+            aliases: vec!["commands-show-output"],
+        }
+    }
+}
+
+impl NodeRule for MD014 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::CodeBlock(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+        if let NodeValue::CodeBlock(code) = &node.data.borrow().value {
+            let mut lines = code.literal.lines();
+            if lines.all(|line| line.starts_with("$ ")) {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(ctx.path.clone(), position);
+                violations.push(violation);
             }
         }
 
