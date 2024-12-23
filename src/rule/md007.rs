@@ -1,9 +1,12 @@
-use comrak::nodes::{ListType, NodeValue};
+use comrak::nodes::{AstNode, ListType, NodeList, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -74,6 +77,44 @@ impl RuleLike for MD007 {
                 }
 
                 maybe_prev_indent = Some(indent);
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD007 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD007",
+            description: "Unordered list indentation",
+            tags: vec!["bullet", "ul", "indentation"],
+            aliases: vec!["ul-indent"],
+        }
+    }
+}
+
+impl NodeRule for MD007 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| {
+            matches!(
+                node,
+                NodeValue::Item(NodeList { list_type, .. }) if *list_type == ListType::Bullet
+            )
+        })
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let NodeValue::Item(_) = node.data.borrow().value {
+            let position = node.data.borrow().sourcepos;
+            let indent = position.start.column - 1;
+
+            if indent != self.indent {
+                let violation = self.to_violation(ctx.path.clone(), position);
+                violations.push(violation);
             }
         }
 
