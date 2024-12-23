@@ -3,7 +3,10 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    line::{LineContext, LineMatcher, LineRule},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default)]
 #[non_exhaustive]
@@ -53,6 +56,34 @@ impl RuleLike for MD009 {
         }
 
         Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD009 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD009",
+            description: "Trailing spaces",
+            tags: vec!["whitespace"],
+            aliases: vec!["no-trailing-spaces"],
+        }
+    }
+}
+
+impl LineRule for MD009 {
+    fn matcher(&self) -> LineMatcher {
+        LineMatcher::new(|line| {
+            let trimmed_line = line.trim_end_matches(' ');
+            trimmed_line != line
+        })
+    }
+
+    fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>> {
+        let trimmed_line = line.trim_end_matches(' ');
+        let position =
+            Sourcepos::from((ctx.lineno, trimmed_line.len() + 1, ctx.lineno, line.len()));
+        let violation = self.to_violation(ctx.path.clone(), position);
+        Ok(vec![violation])
     }
 }
 
