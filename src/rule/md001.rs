@@ -1,19 +1,32 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeHeading, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeValueMatcher},
+    NewRuleLike, NodeRule, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct MD001;
+pub struct State {
+    pub maybe_prev_level: Option<u8>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MD001 {
+    state: State,
+}
 
 impl MD001 {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            state: State::default(),
+        }
     }
 }
 
@@ -55,6 +68,41 @@ impl RuleLike for MD001 {
 
                 maybe_prev_level = Some(heading.level);
             }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD001 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD001",
+            description: "Header levels should only increment by one level at a time",
+            tags: vec!["headers"],
+            aliases: vec!["header-increment"],
+        }
+    }
+}
+
+impl NodeRule for MD001 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let NodeValue::Heading(NodeHeading { level, .. }) = node.data.borrow().value {
+            if let Some(prev_level) = self.state.maybe_prev_level {
+                if level > prev_level + 1 {
+                    let position = node.data.borrow().sourcepos;
+                    let violation = self.to_violation(ctx.path.clone(), position);
+                    violations.push(violation);
+                }
+            }
+
+            self.state.maybe_prev_level = Some(level);
         }
 
         Ok(violations)
