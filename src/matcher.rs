@@ -1,12 +1,6 @@
 use comrak::nodes::{AstNode, NodeValue};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Matcher {
-    NodeValue(NodeValueMatcher),
-    Line(LineMatcher),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeValueMatcher {
     pred: fn(&NodeValue) -> bool,
 }
