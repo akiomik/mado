@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use comrak::nodes::Sourcepos;
+use comrak::nodes::{AstNode, Sourcepos};
 use miette::Result;
 use serde::Deserialize;
 
-use crate::{violation::Violation, Document};
+use crate::{matcher::Matcher, violation::Violation, Document};
 
 mod helper;
 mod md001;
@@ -106,6 +106,19 @@ pub trait RuleLike: Send {
             position,
         )
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Context {
+    pub path: PathBuf,
+    pub level: usize,
+    pub list_level: Option<usize>,
+}
+
+pub trait NewRule: Send {
+    fn matcher(&self) -> Box<dyn Matcher>;
+
+    fn run<'a>(&self, ctx: &Context, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;
 }
 
 pub use md001::MD001;
