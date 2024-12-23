@@ -7,7 +7,10 @@ use regex::Regex;
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    line::{LineContext, LineMatcher, LineRule},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -57,6 +60,41 @@ impl RuleLike for MD010 {
                 let violation = self.to_violation(doc.path.clone(), position);
                 violations.push(violation);
             }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD010 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD010",
+            description: "Hard tabs",
+            tags: vec!["whitespace", "hard_tab"],
+            aliases: vec!["no-hard-tabs"],
+        }
+    }
+}
+
+impl LineRule for MD010 {
+    fn matcher(&self) -> LineMatcher {
+        LineMatcher::new(|_line| true)
+    }
+
+    fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>> {
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            #[allow(clippy::unwrap_used)]
+            Regex::new("\t").unwrap()
+        });
+
+        let mut violations = vec![];
+        let mut locs = RE.capture_locations();
+        RE.captures_read(&mut locs, line);
+        if let Some((start_column, end_column)) = locs.get(0) {
+            let position = Sourcepos::from((ctx.lineno, start_column + 1, ctx.lineno, end_column));
+            let violation = self.to_violation(ctx.path.clone(), position);
+            violations.push(violation);
         }
 
         Ok(violations)
