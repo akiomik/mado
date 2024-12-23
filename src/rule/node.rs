@@ -5,6 +5,8 @@ use miette::Result;
 
 use crate::Violation;
 
+use super::NewRuleLike;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeValueMatcher {
     pred: fn(&NodeValue) -> bool,
@@ -29,7 +31,7 @@ pub struct NodeContext {
     pub list_level: Option<usize>,
 }
 
-pub trait NodeRule: Send {
+pub trait NodeRule: NewRuleLike {
     fn matcher(&self) -> NodeValueMatcher;
 
     fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;

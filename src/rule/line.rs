@@ -4,6 +4,8 @@ use miette::Result;
 
 use crate::Violation;
 
+use super::NewRuleLike;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineMatcher {
     pred: fn(&str) -> bool,
@@ -27,7 +29,7 @@ pub struct LineContext {
     pub lineno: usize,
 }
 
-pub trait LineRule: Send {
+pub trait LineRule: NewRuleLike {
     fn matcher(&self) -> LineMatcher;
 
     fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>>;

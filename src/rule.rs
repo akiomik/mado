@@ -112,6 +112,17 @@ pub trait RuleLike: Send {
     }
 }
 
+pub struct RuleMetadata {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub tags: Vec<&'static str>,
+    pub aliases: Vec<&'static str>,
+}
+
+pub trait NewRuleLike: Send {
+    fn metadata(&self) -> RuleMetadata;
+}
+
 pub enum RuleType {
     Node(Box<dyn NodeRule>),
     Line(Box<dyn LineRule>),
