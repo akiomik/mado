@@ -5,17 +5,29 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    pub levels: HashMap<usize, Sourcepos>,
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct MD005;
+pub struct MD005 {
+    state: State,
+}
 
 impl MD005 {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            state: State::default(),
+        }
     }
 
     fn check_recursive<'a>(
@@ -78,6 +90,44 @@ impl RuleLike for MD005 {
         let mut levels: HashMap<usize, Sourcepos> = HashMap::new();
 
         self.check_recursive(doc.ast, &doc.path, &mut violations, &mut levels, 0);
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD005 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD005",
+            description: "Inconsistent indentation for list items at the same level",
+            tags: vec!["bullet", "ul", "indentation"],
+            aliases: vec!["list-indent"],
+        }
+    }
+}
+
+impl NodeRule for MD005 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Item(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(level) = ctx.list_level {
+            let position = node.data.borrow().sourcepos;
+            match self.state.levels.get(&level) {
+                Some(expected_position) => {
+                    if position.start.column != expected_position.start.column {
+                        let violation = self.to_violation(ctx.path.clone(), position);
+                        violations.push(violation);
+                    }
+                }
+                None => {
+                    self.state.levels.insert(level, position);
+                }
+            }
+        }
 
         Ok(violations)
     }
