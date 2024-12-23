@@ -1,11 +1,14 @@
-use comrak::nodes::{ListType, NodeList, NodeValue};
+use comrak::nodes::{AstNode, ListType, NodeList, NodeValue};
 use miette::Result;
 use serde::Deserialize;
 
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -18,10 +21,16 @@ pub enum ListStyle {
     // Sublist, // TODO
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
+pub struct State {
+    seen_list_char: Option<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD004 {
     style: ListStyle,
+    state: State,
 }
 
 impl MD004 {
@@ -30,7 +39,10 @@ impl MD004 {
     #[inline]
     #[must_use]
     pub fn new(style: ListStyle) -> Self {
-        Self { style }
+        Self {
+            style,
+            state: State::default(),
+        }
     }
 }
 
@@ -39,6 +51,7 @@ impl Default for MD004 {
     fn default() -> Self {
         Self {
             style: Self::DEFAULT_LIST_STYLE,
+            state: State::default(),
         }
     }
 }
@@ -93,6 +106,54 @@ impl RuleLike for MD004 {
                 if maybe_list_char.is_none() {
                     maybe_list_char = Some(bullet_char);
                 }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD004 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD004",
+            description: "Unordered list style",
+            tags: vec!["bullet", "ul"],
+            aliases: vec!["ul-style"],
+        }
+    }
+}
+
+impl NodeRule for MD004 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| {
+            matches!(
+                node,
+                NodeValue::Item(NodeList { list_type, .. }) if *list_type == ListType::Bullet
+            )
+        })
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let NodeValue::Item(NodeList { bullet_char, .. }) = node.data.borrow().value {
+            let is_violated = match (&self.style, self.state.seen_list_char) {
+                (ListStyle::Consistent, Some(list_char)) => bullet_char != list_char,
+                (ListStyle::Asterisk, _) => bullet_char != b'*',
+                (ListStyle::Plus, _) => bullet_char != b'+',
+                (ListStyle::Dash, _) => bullet_char != b'-',
+                _ => false,
+            };
+
+            if is_violated {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(ctx.path.clone(), position);
+                violations.push(violation);
+            }
+
+            if self.state.seen_list_char.is_none() {
+                self.state.seen_list_char = Some(bullet_char);
             }
         }
 
