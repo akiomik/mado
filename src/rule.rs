@@ -109,16 +109,33 @@ pub trait RuleLike: Send {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context {
+pub struct NodeContext {
     pub path: PathBuf,
     pub level: usize,
     pub list_level: Option<usize>,
 }
 
-pub trait NewRule: Send {
-    fn matcher(&self) -> Box<dyn Matcher>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineContext {
+    pub path: PathBuf,
+    pub lineno: usize,
+}
 
-    fn run<'a>(&self, ctx: &Context, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;
+pub enum RuleType {
+    Node(Box<dyn NodeRule>),
+    Line(Box<dyn LineRule>),
+}
+
+pub trait NodeRule: Send {
+    fn matcher(&self) -> Matcher;
+
+    fn run<'a>(&self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>>;
+}
+
+pub trait LineRule: Send {
+    fn matcher(&self) -> Matcher;
+
+    fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>>;
 }
 
 pub use md001::MD001;
