@@ -1,22 +1,35 @@
 use std::collections::HashSet;
 
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{helper::inline_text_of, RuleLike};
+use super::{
+    helper::inline_text_of,
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    pub contents: HashSet<String>,
+}
 
 // TODO: Support allow_different_nesting
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct MD024;
+pub struct MD024 {
+    state: State,
+}
 
 impl MD024 {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            state: State::default(),
+        }
     }
 }
 
@@ -57,6 +70,38 @@ impl RuleLike for MD024 {
                     contents.insert(text.clone());
                 }
             }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD024 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD024",
+            description: "Multiple headers with the same content",
+            tags: vec!["headers"],
+            aliases: vec!["no-duplicate-header"],
+        }
+    }
+}
+
+impl NodeRule for MD024 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        let text = inline_text_of(node);
+        if self.state.contents.contains(&text) {
+            let position = node.data.borrow().sourcepos;
+            let violation = self.to_violation(ctx.path.clone(), position);
+            violations.push(violation);
+        } else {
+            self.state.contents.insert(text.clone());
         }
 
         Ok(violations)
