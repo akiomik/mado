@@ -1,10 +1,13 @@
-use comrak::nodes::{NodeHeading, NodeValue};
+use comrak::nodes::{AstNode, NodeHeading, NodeValue};
 use miette::Result;
 
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -60,6 +63,46 @@ impl RuleLike for MD019 {
                             let violation = self.to_violation(doc.path.clone(), heading_position);
                             violations.push(violation);
                         }
+                    }
+                }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD019 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD019",
+            description: "Multiple spaces after hash on atx style header",
+            tags: vec!["headers", "atx", "spaces"],
+            aliases: vec!["no-multiple-space-atx"],
+        }
+    }
+}
+
+impl NodeRule for MD019 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| {
+            matches!(node, NodeValue::Heading(NodeHeading { setext: false, .. }))
+        })
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(text_node) = node.first_child() {
+            if let NodeValue::Heading(NodeHeading { level, .. }) = &node.data.borrow().value {
+                if let NodeValue::Text(_) = text_node.data.borrow().value {
+                    let heading_position = node.data.borrow().sourcepos;
+                    let text_position = text_node.data.borrow().sourcepos;
+                    let expected_text_offset =
+                        heading_position.start.column + (*level as usize) + 1;
+                    if text_position.start.column > expected_text_offset {
+                        let violation = self.to_violation(ctx.path.clone(), heading_position);
+                        violations.push(violation);
                     }
                 }
             }
