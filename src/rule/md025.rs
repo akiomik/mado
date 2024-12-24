@@ -1,14 +1,23 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeHeading, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    top_level_header_seen: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD025 {
     level: u8,
+    state: State,
 }
 
 impl MD025 {
@@ -17,7 +26,10 @@ impl MD025 {
     #[inline]
     #[must_use]
     pub fn new(level: u8) -> Self {
-        Self { level }
+        Self {
+            level,
+            state: State::default(),
+        }
     }
 }
 
@@ -26,6 +38,7 @@ impl Default for MD025 {
     fn default() -> Self {
         Self {
             level: Self::DEFAULT_LEVEL,
+            state: State::default(),
         }
     }
 }
@@ -66,6 +79,41 @@ impl RuleLike for MD025 {
                     } else {
                         seen_top_level_header = true;
                     }
+                }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD025 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD025",
+            description: "Multiple top level headers in the same document",
+            tags: vec!["headers"],
+            aliases: vec!["single-h1"],
+        }
+    }
+}
+
+impl NodeRule for MD025 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let NodeValue::Heading(NodeHeading { level, .. }) = node.data.borrow().value {
+            if level == self.level {
+                if self.state.top_level_header_seen {
+                    let position = node.data.borrow().sourcepos;
+                    let violation = self.to_violation(ctx.path.clone(), position);
+                    violations.push(violation);
+                } else {
+                    self.state.top_level_header_seen = true;
                 }
             }
         }
