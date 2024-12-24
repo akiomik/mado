@@ -104,6 +104,10 @@ impl NewRuleLike for MD005 {
             aliases: vec!["list-indent"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD005 {

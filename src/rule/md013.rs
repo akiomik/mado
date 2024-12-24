@@ -89,6 +89,8 @@ impl NewRuleLike for MD013 {
             aliases: vec!["line-length"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl LineRule for MD013 {

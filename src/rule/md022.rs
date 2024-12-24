@@ -98,6 +98,10 @@ impl NewRuleLike for MD022 {
             aliases: vec!["blanks-around-headers"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD022 {

@@ -75,6 +75,8 @@ impl NewRuleLike for MD010 {
             aliases: vec!["no-hard-tabs"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl LineRule for MD010 {

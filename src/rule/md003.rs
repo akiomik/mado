@@ -118,6 +118,10 @@ impl NewRuleLike for MD003 {
             aliases: vec!["header-style"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD003 {

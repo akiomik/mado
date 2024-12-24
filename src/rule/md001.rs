@@ -83,6 +83,8 @@ impl NewRuleLike for MD001 {
             aliases: vec!["header-increment"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl NodeRule for MD001 {

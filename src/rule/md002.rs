@@ -94,6 +94,10 @@ impl NewRuleLike for MD002 {
             aliases: vec!["first-header-h1"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD002 {

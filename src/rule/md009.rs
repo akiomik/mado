@@ -68,6 +68,8 @@ impl NewRuleLike for MD009 {
             aliases: vec!["no-trailing-spaces"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl LineRule for MD009 {

@@ -122,6 +122,10 @@ impl NewRuleLike for MD004 {
             aliases: vec!["ul-style"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD004 {

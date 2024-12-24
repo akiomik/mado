@@ -69,6 +69,8 @@ impl NewRuleLike for MD014 {
             aliases: vec!["commands-show-output"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl NodeRule for MD014 {

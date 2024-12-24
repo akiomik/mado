@@ -96,6 +96,10 @@ impl NewRuleLike for MD025 {
             aliases: vec!["single-h1"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD025 {

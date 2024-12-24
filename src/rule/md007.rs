@@ -93,6 +93,8 @@ impl NewRuleLike for MD007 {
             aliases: vec!["ul-indent"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl NodeRule for MD007 {

@@ -68,6 +68,8 @@ impl NewRuleLike for MD023 {
             aliases: vec!["header-start-left"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl NodeRule for MD023 {

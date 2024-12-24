@@ -163,6 +163,17 @@ impl Linter {
             }
         }
 
+        for rule in self.new_rules.iter_mut() {
+            match rule {
+                RuleType::Node(node_rule) => {
+                    node_rule.reset();
+                }
+                RuleType::Line(line_rule) => {
+                    line_rule.reset();
+                }
+            }
+        }
+
         violations.sort();
 
         Ok(violations)

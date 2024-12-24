@@ -85,6 +85,10 @@ impl NewRuleLike for MD024 {
             aliases: vec!["no-duplicate-header"],
         }
     }
+
+    fn reset(&mut self) {
+        self.state = State::default();
+    }
 }
 
 impl NodeRule for MD024 {

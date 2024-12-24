@@ -76,6 +76,8 @@ impl NewRuleLike for MD006 {
             aliases: vec!["ul-start-left"],
         }
     }
+
+    fn reset(&mut self) {}
 }
 
 impl NodeRule for MD006 {
