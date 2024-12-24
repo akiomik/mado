@@ -1,9 +1,12 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -50,6 +53,35 @@ impl RuleLike for MD023 {
                     violations.push(violation);
                 }
             }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD023 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD023",
+            description: "Headers must start at the beginning of the line",
+            tags: vec!["headers", "spaces"],
+            aliases: vec!["header-start-left"],
+        }
+    }
+}
+
+impl NodeRule for MD023 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        let position = node.data.borrow().sourcepos;
+        if position.start.column > 1 {
+            let violation = self.to_violation(ctx.path.clone(), position);
+            violations.push(violation);
         }
 
         Ok(violations)
