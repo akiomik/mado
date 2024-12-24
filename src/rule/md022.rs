@@ -1,19 +1,33 @@
-use comrak::nodes::{AstNode, NodeValue};
+use std::cell::RefCell;
+
+use comrak::nodes::{Ast, AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone)]
+pub struct State {
+    pub maybe_prev_node_ref: Option<RefCell<Ast>>,
+}
+
+#[derive(Default, Debug, Clone)]
 #[non_exhaustive]
-pub struct MD022;
+pub struct MD022 {
+    pub state: State,
+}
 
 impl MD022 {
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            state: State::default(),
+        }
     }
 }
 
@@ -70,6 +84,55 @@ impl RuleLike for MD022 {
 
             maybe_prev_node = Some(node);
         }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD022 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD022",
+            description: "Headers should be surrounded by blank lines",
+            tags: vec!["headers", "blank_lines"],
+            aliases: vec!["blanks-around-headers"],
+        }
+    }
+}
+
+impl NodeRule for MD022 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|_| true)
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(prev_node_ref) = &self.state.maybe_prev_node_ref {
+            let prev_position = prev_node_ref.borrow().sourcepos;
+            let position = node.data.borrow().sourcepos;
+
+            match (&prev_node_ref.borrow().value, &node.data.borrow().value) {
+                (NodeValue::Heading(_), _) => {
+                    if position.start.line == prev_position.end.line + 1 {
+                        let violation = self.to_violation(ctx.path.clone(), prev_position);
+                        violations.push(violation);
+                    }
+                }
+                (_, NodeValue::Heading(_)) => {
+                    // NOTE: Ignore column 0, as the List may end on the next line
+                    if position.start.line == prev_position.end.line + 1
+                        && prev_position.end.column != 0
+                    {
+                        let violation = self.to_violation(ctx.path.clone(), position);
+                        violations.push(violation);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.state.maybe_prev_node_ref = Some(node.data.clone());
 
         Ok(violations)
     }
