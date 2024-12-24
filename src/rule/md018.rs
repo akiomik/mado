@@ -1,10 +1,13 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::violation::Violation;
 use crate::Document;
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -52,6 +55,47 @@ impl RuleLike for MD018 {
                             let violation = self.to_violation(doc.path.clone(), position);
                             violations.push(violation);
                         }
+                    }
+                }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD018 {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD018",
+            description: "No space after hash on atx style header",
+            tags: vec!["headers", "atx", "spaces"],
+            aliases: vec!["no-missing-space-atx"],
+        }
+    }
+}
+
+impl NodeRule for MD018 {
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| {
+            matches!(
+                node,
+                NodeValue::Text(text)
+                if text.starts_with('#')
+            )
+        })
+    }
+
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(parent_node) = node.parent() {
+            if let NodeValue::Paragraph = &parent_node.data.borrow().value {
+                if let NodeValue::Text(_) = &node.data.borrow().value {
+                    let position = node.data.borrow().sourcepos;
+                    if position.start.column == 1 {
+                        let violation = self.to_violation(ctx.path.clone(), position);
+                        violations.push(violation);
                     }
                 }
             }
