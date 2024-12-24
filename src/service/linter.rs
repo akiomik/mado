@@ -1,8 +1,13 @@
+use comrak::nodes::AstNode;
+use comrak::nodes::NodeValue;
 use miette::Result;
 
 use crate::config::Config;
 use crate::rule;
+use crate::rule::line::LineContext;
+use crate::rule::node::NodeContext;
 use crate::rule::RuleLike;
+use crate::rule::RuleType;
 use crate::violation::Violation;
 use crate::Document;
 use crate::Rule;
@@ -10,6 +15,7 @@ use crate::Rule;
 #[derive(Default)]
 pub struct Linter {
     rules: Vec<Box<dyn RuleLike>>,
+    new_rules: Vec<RuleType>,
 }
 
 impl Linter {
@@ -72,7 +78,94 @@ impl Linter {
             })
             .collect();
 
-        Self { rules }
+        let new_rules = vec![
+            RuleType::Node(Box::new(rule::MD001::new())),
+            RuleType::Node(Box::new(rule::MD002::new(config.lint.md002.level))),
+            RuleType::Node(Box::new(rule::MD003::new(config.lint.md003.style.clone()))),
+            RuleType::Node(Box::new(rule::MD004::new(config.lint.md004.style.clone()))),
+            RuleType::Node(Box::new(rule::MD005::new())),
+            RuleType::Node(Box::new(rule::MD006::new())),
+            RuleType::Node(Box::new(rule::MD007::new(config.lint.md007.indent))),
+            RuleType::Line(Box::new(rule::MD009::new())),
+            RuleType::Line(Box::new(rule::MD010::new())),
+            RuleType::Line(Box::new(rule::MD013::new(config.lint.md013.line_length))),
+            RuleType::Node(Box::new(rule::MD014::new())),
+            RuleType::Node(Box::new(rule::MD018::new())),
+            RuleType::Node(Box::new(rule::MD019::new())),
+            RuleType::Node(Box::new(rule::MD022::new())),
+            RuleType::Node(Box::new(rule::MD023::new())),
+            RuleType::Node(Box::new(rule::MD024::new())),
+            RuleType::Node(Box::new(rule::MD025::new(config.lint.md025.level))),
+        ];
+
+        Self { rules, new_rules }
+    }
+
+    #[inline]
+    fn check_node_recursive<'a>(
+        &mut self,
+        ctx: &NodeContext,
+        root: &'a AstNode<'a>,
+    ) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+        for node in root.children() {
+            let mut node_ctx = ctx.clone();
+            node_ctx.level += 1;
+
+            if let NodeValue::List(_) = &node.data.borrow().value {
+                match node_ctx.list_level {
+                    Some(list_level) => {
+                        node_ctx.list_level = Some(list_level + 1);
+                    }
+                    None => {
+                        node_ctx.list_level = Some(1);
+                    }
+                }
+            }
+
+            for rule in self.new_rules.iter_mut() {
+                if let RuleType::Node(node_rule) = rule {
+                    if node_rule.matcher().is_match(node) {
+                        let rule_violations = node_rule.run(&node_ctx, node)?;
+                        violations.extend(rule_violations);
+                    }
+                }
+            }
+
+            let child_violations = self.check_node_recursive(&node_ctx, node)?;
+            violations.extend(child_violations);
+        }
+        Ok(violations)
+    }
+
+    #[inline]
+    pub fn new_check(&mut self, doc: &Document) -> Result<Vec<Violation>> {
+        let node_ctx = NodeContext {
+            path: doc.path.clone(),
+            level: 0,
+            list_level: None,
+        };
+        let mut violations = self.check_node_recursive(&node_ctx, doc.ast)?;
+
+        let mut line_ctx = LineContext {
+            path: doc.path.clone(),
+            lineno: 0,
+        };
+        for line in doc.text.lines() {
+            line_ctx.lineno += 1;
+            for rule in self.new_rules.iter() {
+                if let RuleType::Line(line_rule) = rule {
+                    if line_rule.matcher().is_match(line) {
+                        let line_violations = line_rule.run(&line_ctx, line)?;
+                        violations.extend(line_violations);
+                    }
+                }
+            }
+        }
+
+        violations.sort();
+
+        Ok(violations)
     }
 
     #[inline]
