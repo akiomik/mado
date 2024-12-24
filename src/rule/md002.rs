@@ -104,7 +104,7 @@ impl NodeRule for MD002 {
     fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
         let mut violations = vec![];
         if let NodeValue::Heading(heading) = node.data.borrow().value {
-            if heading.level != self.level {
+            if !self.state.header_seen && heading.level != self.level {
                 let position = node.data.borrow().sourcepos;
                 let violation = self.to_violation(ctx.path.clone(), position);
                 violations.push(violation);
