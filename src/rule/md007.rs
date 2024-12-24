@@ -112,7 +112,7 @@ impl NodeRule for MD007 {
             let position = node.data.borrow().sourcepos;
             let indent = position.start.column - 1;
 
-            if indent != self.indent {
+            if indent != 0 && indent != self.indent {
                 let violation = self.to_violation(ctx.path.clone(), position);
                 violations.push(violation);
             }
