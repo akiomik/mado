@@ -91,10 +91,8 @@ impl LineRule for MD010 {
         });
 
         let mut violations = vec![];
-        let mut locs = RE.capture_locations();
-        RE.captures_read(&mut locs, line);
-        if let Some((start_column, end_column)) = locs.get(0) {
-            let position = Sourcepos::from((ctx.lineno, start_column + 1, ctx.lineno, end_column));
+        if let Some(m) = RE.find(line) {
+            let position = Sourcepos::from((ctx.lineno, m.start() + 1, ctx.lineno, m.end()));
             let violation = self.to_violation(ctx.path.clone(), position);
             violations.push(violation);
         }
