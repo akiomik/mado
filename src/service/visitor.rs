@@ -34,7 +34,7 @@ impl ParallelVisitor for MarkdownLintVisitor {
                     let either_doc = Document::open(&arena, path);
                     match either_doc {
                         Ok(doc) => {
-                            let violations = self.linter.new_check(&doc).unwrap();
+                            let violations = self.linter.new_flat_check(&doc).unwrap();
                             self.tx.send(violations).unwrap();
                         }
                         Err(err) => println!("{err}"),

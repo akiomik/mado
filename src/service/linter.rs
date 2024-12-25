@@ -139,6 +139,77 @@ impl Linter {
     }
 
     #[inline]
+    pub fn new_flat_check(&mut self, doc: &Document) -> Result<Vec<Violation>> {
+        let mut node_ctx = NodeContext {
+            path: doc.path.clone(),
+            level: 0,
+            list_level: None,
+        };
+
+        let mut violations = vec![];
+        let mut maybe_prev_list_node: Option<&'_ AstNode<'_>> = None;
+        for node in doc.ast.descendants() {
+            if let NodeValue::List(_) = &node.data.borrow().value {
+                if let Some(prev_list_node) = maybe_prev_list_node {
+                    let prev_position = prev_list_node.data.borrow().sourcepos;
+                    let position = node.data.borrow().sourcepos;
+                    match node_ctx.list_level {
+                        Some(list_level) if position.start.column > prev_position.start.column => {
+                            node_ctx.list_level = Some(list_level + 1);
+                        }
+                        Some(_) if position.start.column == prev_position.start.column => {}
+                        _ => {
+                            node_ctx.list_level = Some(1);
+                        }
+                    }
+                }
+
+                maybe_prev_list_node = Some(node);
+            }
+
+            for rule in self.new_rules.iter_mut() {
+                if let RuleType::Node(node_rule) = rule {
+                    if node_rule.matcher().is_match(node) {
+                        let rule_violations = node_rule.run(&node_ctx, node)?;
+                        violations.extend(rule_violations);
+                    }
+                }
+            }
+        }
+
+        let mut line_ctx = LineContext {
+            path: doc.path.clone(),
+            lineno: 0,
+        };
+        for line in doc.text.lines() {
+            line_ctx.lineno += 1;
+            for rule in self.new_rules.iter() {
+                if let RuleType::Line(line_rule) = rule {
+                    if line_rule.matcher().is_match(line) {
+                        let line_violations = line_rule.run(&line_ctx, line)?;
+                        violations.extend(line_violations);
+                    }
+                }
+            }
+        }
+
+        for rule in self.new_rules.iter_mut() {
+            match rule {
+                RuleType::Node(node_rule) => {
+                    node_rule.reset();
+                }
+                RuleType::Line(line_rule) => {
+                    line_rule.reset();
+                }
+            }
+        }
+
+        violations.sort();
+
+        Ok(violations)
+    }
+
+    #[inline]
     pub fn new_check(&mut self, doc: &Document) -> Result<Vec<Violation>> {
         let node_ctx = NodeContext {
             path: doc.path.clone(),
