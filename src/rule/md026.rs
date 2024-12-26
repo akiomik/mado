@@ -1,9 +1,12 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -66,6 +69,47 @@ impl RuleLike for MD026 {
                                 violations.push(violation);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD026 {
+    #[inline]
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD026",
+            description: "Trailing punctuation in header",
+            tags: vec!["headers"],
+            aliases: vec!["no-trailing-punctuation"],
+        }
+    }
+
+    #[inline]
+    fn reset(&mut self) {}
+}
+
+impl NodeRule for MD026 {
+    #[inline]
+    fn matcher(&self) -> super::node::NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
+    }
+
+    #[inline]
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(child) = node.last_child() {
+            if let NodeValue::Text(text) = &child.data.borrow().value {
+                if let Some(last_char) = text.chars().last() {
+                    if self.punctuation.contains(last_char) {
+                        let position = node.data.borrow().sourcepos;
+                        let violation = self.to_violation(ctx.path.clone(), position);
+                        violations.push(violation);
                     }
                 }
             }
