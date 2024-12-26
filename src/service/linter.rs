@@ -154,10 +154,12 @@ impl Linter {
                     let prev_position = prev_list_node.data.borrow().sourcepos;
                     let position = node.data.borrow().sourcepos;
                     match node_ctx.list_level {
-                        Some(list_level) if position.start.column > prev_position.start.column => {
+                        Some(list_level)
+                            if position.start.column > prev_position.start.column + 1 =>
+                        {
                             node_ctx.list_level = Some(list_level + 1);
                         }
-                        Some(_) if position.start.column == prev_position.start.column => {}
+                        Some(_) if position.start.column >= prev_position.start.column => {}
                         _ => {
                             node_ctx.list_level = Some(1);
                         }
