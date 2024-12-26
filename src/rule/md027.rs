@@ -1,9 +1,12 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::RuleLike;
+use super::{
+    node::{NodeContext, NodeRule, NodeValueMatcher},
+    NewRuleLike, RuleLike, RuleMetadata,
+};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -53,6 +56,45 @@ impl RuleLike for MD027 {
                         violations.push(violation);
                     }
                 }
+            }
+        }
+
+        Ok(violations)
+    }
+}
+
+impl NewRuleLike for MD027 {
+    #[inline]
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            name: "MD027",
+            description: "Multiple spaces after blockquote symbol",
+            tags: vec!["blockquote", "whitespace", "indentation"],
+            aliases: vec!["no-multiple-space-blockquote"],
+        }
+    }
+
+    #[inline]
+    fn reset(&mut self) {}
+}
+
+impl NodeRule for MD027 {
+    #[inline]
+    fn matcher(&self) -> NodeValueMatcher {
+        NodeValueMatcher::new(|node| matches!(node, NodeValue::BlockQuote))
+    }
+
+    #[inline]
+    fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
+        let mut violations = vec![];
+
+        if let Some(child_node) = node.first_child() {
+            let block_quote_position = node.data.borrow().sourcepos;
+            let child_position = child_node.data.borrow().sourcepos;
+
+            if child_position.start.column > block_quote_position.start.column + 2 {
+                let violation = self.to_violation(ctx.path.clone(), child_position);
+                violations.push(violation);
             }
         }
 
