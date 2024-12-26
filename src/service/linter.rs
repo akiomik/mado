@@ -123,7 +123,7 @@ impl Linter {
                 }
             }
 
-            for rule in self.new_rules.iter_mut() {
+            for rule in &mut self.new_rules {
                 if let RuleType::Node(node_rule) = rule {
                     if node_rule.matcher().is_match(node) {
                         let rule_violations = node_rule.run(&node_ctx, node)?;
@@ -169,7 +169,7 @@ impl Linter {
                 maybe_prev_list_node = Some(node);
             }
 
-            for rule in self.new_rules.iter_mut() {
+            for rule in &mut self.new_rules {
                 if let RuleType::Node(node_rule) = rule {
                     if node_rule.matcher().is_match(node) {
                         let rule_violations = node_rule.run(&node_ctx, node)?;
@@ -185,7 +185,7 @@ impl Linter {
         };
         for line in doc.text.lines() {
             line_ctx.lineno += 1;
-            for rule in self.new_rules.iter() {
+            for rule in &self.new_rules {
                 if let RuleType::Line(line_rule) = rule {
                     if line_rule.matcher().is_match(line) {
                         let line_violations = line_rule.run(&line_ctx, line)?;
@@ -195,7 +195,7 @@ impl Linter {
             }
         }
 
-        for rule in self.new_rules.iter_mut() {
+        for rule in &mut self.new_rules {
             match rule {
                 RuleType::Node(node_rule) => {
                     node_rule.reset();
@@ -226,7 +226,7 @@ impl Linter {
         };
         for line in doc.text.lines() {
             line_ctx.lineno += 1;
-            for rule in self.new_rules.iter() {
+            for rule in &self.new_rules {
                 if let RuleType::Line(line_rule) = rule {
                     if line_rule.matcher().is_match(line) {
                         let line_violations = line_rule.run(&line_ctx, line)?;
@@ -236,7 +236,7 @@ impl Linter {
             }
         }
 
-        for rule in self.new_rules.iter_mut() {
+        for rule in &mut self.new_rules {
             match rule {
                 RuleType::Node(node_rule) => {
                     node_rule.reset();

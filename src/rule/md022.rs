@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use core::cell::RefCell;
 
 use comrak::nodes::{Ast, AstNode, NodeValue};
 use miette::Result;
@@ -90,6 +90,7 @@ impl RuleLike for MD022 {
 }
 
 impl NewRuleLike for MD022 {
+    #[inline]
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
             name: "MD022",
@@ -99,16 +100,19 @@ impl NewRuleLike for MD022 {
         }
     }
 
+    #[inline]
     fn reset(&mut self) {
         self.state = State::default();
     }
 }
 
 impl NodeRule for MD022 {
+    #[inline]
     fn matcher(&self) -> NodeValueMatcher {
         NodeValueMatcher::new(|_| true)
     }
 
+    #[inline]
     fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 

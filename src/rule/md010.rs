@@ -67,6 +67,7 @@ impl RuleLike for MD010 {
 }
 
 impl NewRuleLike for MD010 {
+    #[inline]
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
             name: "MD010",
@@ -76,14 +77,17 @@ impl NewRuleLike for MD010 {
         }
     }
 
+    #[inline]
     fn reset(&mut self) {}
 }
 
 impl LineRule for MD010 {
+    #[inline]
     fn matcher(&self) -> LineMatcher {
         LineMatcher::new(|_line| true)
     }
 
+    #[inline]
     fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>> {
         static RE: LazyLock<Regex> = LazyLock::new(|| {
             #[allow(clippy::unwrap_used)]

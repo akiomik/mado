@@ -60,6 +60,7 @@ impl RuleLike for MD009 {
 }
 
 impl NewRuleLike for MD009 {
+    #[inline]
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
             name: "MD009",
@@ -69,10 +70,12 @@ impl NewRuleLike for MD009 {
         }
     }
 
+    #[inline]
     fn reset(&mut self) {}
 }
 
 impl LineRule for MD009 {
+    #[inline]
     fn matcher(&self) -> LineMatcher {
         LineMatcher::new(|line| {
             let trimmed_line = line.trim_end_matches(' ');
@@ -80,6 +83,7 @@ impl LineRule for MD009 {
         })
     }
 
+    #[inline]
     fn run<'a>(&self, ctx: &LineContext, line: &str) -> Result<Vec<Violation>> {
         let trimmed_line = line.trim_end_matches(' ');
         let position =

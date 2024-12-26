@@ -88,6 +88,7 @@ impl RuleLike for MD025 {
 }
 
 impl NewRuleLike for MD025 {
+    #[inline]
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
             name: "MD025",
@@ -97,16 +98,19 @@ impl NewRuleLike for MD025 {
         }
     }
 
+    #[inline]
     fn reset(&mut self) {
         self.state = State::default();
     }
 }
 
 impl NodeRule for MD025 {
+    #[inline]
     fn matcher(&self) -> NodeValueMatcher {
         NodeValueMatcher::new(|node| matches!(node, NodeValue::Heading(_)))
     }
 
+    #[inline]
     fn run<'a>(&mut self, ctx: &NodeContext, node: &'a AstNode<'a>) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 

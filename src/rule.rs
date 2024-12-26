@@ -112,6 +112,8 @@ pub trait RuleLike: Send {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RuleMetadata {
     pub name: &'static str,
     pub description: &'static str,
@@ -125,6 +127,7 @@ pub trait NewRuleLike: Send {
     fn reset(&mut self);
 }
 
+#[non_exhaustive]
 pub enum RuleType {
     Node(Box<dyn NodeRule>),
     Line(Box<dyn LineRule>),
