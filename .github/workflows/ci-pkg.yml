@@ -19,6 +19,7 @@ jobs:
             stable: true
         env:
             HOMEBREW_TAP_REPOSITORY: /opt/homebrew/Library/Taps/akiomik/mado
+            HOMEBREW_NO_AUTO_UPDATE: 1
       - name: Rename akiomik/mado to akiomik/homebrew-mado
         run: mv /opt/homebrew/Library/Taps/akiomik/mado /opt/homebrew/Library/Taps/akiomik/homebrew-mado
       - name: Checkout repository for updating HEAD
