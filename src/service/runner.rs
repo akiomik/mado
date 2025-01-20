@@ -10,7 +10,7 @@ use miette::{IntoDiagnostic as _, Result};
 
 use super::visitor::MarkdownLintVisitorFactory;
 use crate::config::Config;
-use crate::Violation;
+use crate::Diagnostic;
 
 pub struct ParallelLintRunner {
     walker: WalkParallel,
@@ -33,17 +33,17 @@ impl ParallelLintRunner {
     // TODO: Don't use expect
     #[expect(clippy::expect_used)]
     #[expect(clippy::unwrap_in_result)]
-    pub fn run(self) -> Result<Vec<Violation>> {
-        let mutex_violations: Arc<Mutex<Vec<Violation>>> = Arc::new(Mutex::new(vec![]));
-        let (tx, rx) = mpsc::sync_channel::<Vec<Violation>>(self.capacity);
+    pub fn run(self) -> Result<Vec<Diagnostic>> {
+        let mutex_diagnostics: Arc<Mutex<Vec<Diagnostic>>> = Arc::new(Mutex::new(vec![]));
+        let (tx, rx) = mpsc::sync_channel::<Vec<Diagnostic>>(self.capacity);
 
-        let local_mutex_violations = Arc::clone(&mutex_violations);
+        let local_mutex_diagnostics = Arc::clone(&mutex_diagnostics);
         let thread = thread::spawn(move || {
-            for violations in rx {
-                let mut acquired_violations = local_mutex_violations
+            for diagnostics in rx {
+                let mut acquired_diagnostics = local_mutex_diagnostics
                     .lock()
                     .expect("lock must be acquired");
-                acquired_violations.extend(violations);
+                acquired_diagnostics.extend(diagnostics);
             }
         });
 
@@ -56,9 +56,9 @@ impl ParallelLintRunner {
             .join()
             .map_err(|err| miette!("Failed to join thread. {:?}", err))?;
 
-        // Take ownership of violations
+        // Take ownership of diagnostics
         let lock =
-            Arc::into_inner(mutex_violations).ok_or_else(|| miette!("Failed to unwrap Arc"))?;
+            Arc::into_inner(mutex_diagnostics).ok_or_else(|| miette!("Failed to unwrap Arc"))?;
         lock.into_inner().into_diagnostic()
     }
 }
