@@ -17,6 +17,7 @@ use crate::Config;
 pub struct Options {
     pub config_path: Option<PathBuf>,
     pub output_format: Option<Format>,
+    pub quiet: bool,
 }
 
 impl Options {
@@ -30,6 +31,8 @@ impl Options {
         if let Some(format) = self.output_format {
             config.lint.output_format = format;
         }
+
+        config.lint.quiet = self.quiet;
 
         Ok(config)
     }
@@ -55,7 +58,10 @@ impl Checker {
         violations.sort_by(self.config.lint.output_format.sorter());
 
         if violations.is_empty() {
-            println!("All checks passed!");
+            if !self.config.lint.quiet {
+                println!("All checks passed!");
+            }
+
             return Ok(ExitCode::SUCCESS);
         }
 
@@ -96,6 +102,7 @@ mod tests {
         let options = Options {
             config_path: None,
             output_format: None,
+            quiet: false,
         };
         let actual = options.to_config().unwrap();
         let mut expected = Config::default();
@@ -109,6 +116,7 @@ mod tests {
         let options = Options {
             config_path: None,
             output_format: Some(Format::Mdl),
+            quiet: false,
         };
         let actual = options.to_config().unwrap();
         let mut expected = Config::default();
@@ -123,6 +131,7 @@ mod tests {
         let options = Options {
             config_path: Some(Path::new("mado.toml").to_path_buf()),
             output_format: None,
+            quiet: false,
         };
         let actual = options.to_config().unwrap();
         let mut expected = Config::default();
@@ -136,6 +145,7 @@ mod tests {
         let options = Options {
             config_path: Some(Path::new("mado.toml").to_path_buf()),
             output_format: Some(Format::Mdl),
+            quiet: false,
         };
         let actual = options.to_config().unwrap();
         let mut expected = Config::default();

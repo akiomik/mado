@@ -32,10 +32,12 @@ fn main() -> Result<ExitCode> {
         Some(Command::Check {
             files,
             output_format,
+            quiet,
         }) => {
             let options = Options {
                 output_format: output_format.clone(),
                 config_path: cli.config,
+                quiet: *quiet,
             };
             let config = options.to_config()?;
             let checker = Checker::new(files, config)?;

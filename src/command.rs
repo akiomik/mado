@@ -18,5 +18,9 @@ pub enum Command {
         /// Output format for violations. The default format is "concise"
         #[arg(value_enum, long = "output-format")]
         output_format: Option<Format>,
+
+        /// Only log errors
+        #[arg(long, default_value_t = false)]
+        quiet: bool,
     },
 }

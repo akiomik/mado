@@ -37,6 +37,7 @@ pub use md046::MD046;
 #[allow(clippy::exhaustive_structs)]
 pub struct Lint {
     pub output_format: Format,
+    pub quiet: bool,
     pub rules: Vec<RuleSet>,
     pub md002: MD002,
     pub md003: MD003,
@@ -102,6 +103,7 @@ impl Default for Lint {
     fn default() -> Self {
         Self {
             output_format: Format::Concise,
+            quiet: false,
             rules: vec![
                 RuleSet::MD001,
                 RuleSet::MD002,
