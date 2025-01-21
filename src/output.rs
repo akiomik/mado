@@ -3,6 +3,8 @@ use core::cmp::Ordering;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+use crate::Diagnostic;
+
 mod concise;
 mod markdownlint;
 mod mdl;
@@ -18,7 +20,7 @@ pub enum Format {
 impl Format {
     #[inline]
     #[must_use]
-    pub fn sorter(&self) -> fn(a: &Violation, b: &Violation) -> Ordering {
+    pub fn sorter(&self) -> fn(a: &Diagnostic, b: &Diagnostic) -> Ordering {
         match self {
             Self::Concise => |a, b| Concise::new(a).cmp(&Concise::new(b)),
             Self::Mdl => |a, b| Mdl::new(a).cmp(&Mdl::new(b)),
@@ -30,8 +32,6 @@ impl Format {
 pub use concise::Concise;
 pub use markdownlint::Markdownlint;
 pub use mdl::Mdl;
-
-use crate::Violation;
 
 #[cfg(test)]
 mod tests {
@@ -45,7 +45,7 @@ mod tests {
     use super::*;
 
     #[allow(clippy::similar_names)]
-    fn violations() -> Vec<Violation> {
+    fn violations() -> Vec<Diagnostic> {
         let path1 = Path::new("foo.md").to_path_buf();
         let path2 = Path::new("bar.md").to_path_buf();
         let md001 = MD001::new();
@@ -66,18 +66,18 @@ mod tests {
         let violation11 = md010.to_violation(path2.clone(), position1);
         let violation12 = md010.to_violation(path2, position2);
         vec![
-            violation1,
-            violation2,
-            violation3,
-            violation4,
-            violation5,
-            violation6,
-            violation7,
-            violation8,
-            violation9,
-            violation10,
-            violation11,
-            violation12,
+            Diagnostic::Violation(violation1),
+            Diagnostic::Violation(violation2),
+            Diagnostic::Violation(violation3),
+            Diagnostic::Violation(violation4),
+            Diagnostic::Violation(violation5),
+            Diagnostic::Violation(violation6),
+            Diagnostic::Violation(violation7),
+            Diagnostic::Violation(violation8),
+            Diagnostic::Violation(violation9),
+            Diagnostic::Violation(violation10),
+            Diagnostic::Violation(violation11),
+            Diagnostic::Violation(violation12),
         ]
     }
 
@@ -88,7 +88,7 @@ mod tests {
         actual.sort_by(Format::Concise.sorter());
         let mut outputs: Vec<_> = violations.iter().map(Concise::new).collect();
         outputs.sort();
-        let expected: Vec<_> = outputs.iter().map(|o| o.violation().clone()).collect();
+        let expected: Vec<_> = outputs.iter().map(|o| o.diagnostic().clone()).collect();
         assert_eq!(actual, expected);
     }
 
@@ -99,7 +99,7 @@ mod tests {
         actual.sort_by(Format::Mdl.sorter());
         let mut outputs: Vec<_> = violations.iter().map(Mdl::new).collect();
         outputs.sort();
-        let expected: Vec<_> = outputs.iter().map(|o| o.violation().clone()).collect();
+        let expected: Vec<_> = outputs.iter().map(|o| o.diagnostic().clone()).collect();
         assert_eq!(actual, expected);
     }
 
@@ -110,7 +110,7 @@ mod tests {
         actual.sort_by(Format::Markdownlint.sorter());
         let mut outputs: Vec<_> = violations.iter().map(Markdownlint::new).collect();
         outputs.sort();
-        let expected: Vec<_> = outputs.iter().map(|o| o.violation().clone()).collect();
+        let expected: Vec<_> = outputs.iter().map(|o| o.diagnostic().clone()).collect();
         assert_eq!(actual, expected);
     }
 }

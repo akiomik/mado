@@ -3,21 +3,21 @@ use core::fmt::{Display, Error, Formatter, Result};
 
 use colored::Colorize as _;
 
-use crate::Violation;
+use crate::Diagnostic;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Markdownlint<'a> {
-    violation: &'a Violation,
+    diagnostic: &'a Diagnostic,
 }
 
 impl<'a> Markdownlint<'a> {
-    pub const fn new(violation: &'a Violation) -> Self {
-        Self { violation }
+    pub const fn new(diagnostic: &'a Diagnostic) -> Self {
+        Self { diagnostic }
     }
 
     #[cfg(test)]
-    pub const fn violation(&self) -> &'a Violation {
-        self.violation
+    pub const fn diagnostic(&self) -> &'a Diagnostic {
+        self.diagnostic
     }
 }
 
@@ -25,21 +25,33 @@ impl Display for Markdownlint<'_> {
     // TODO: Add `expected` and `actual`
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let path = self.violation.path().to_str().ok_or(Error)?;
-        write!(
-            f,
-            "{}",
-            format!(
-                "{}:{}:{} {}/{} {}",
-                path,
-                self.violation.position().start.line,
-                self.violation.position().start.column,
-                self.violation.name(),
-                self.violation.alias(),
-                self.violation.description()
-            )
-            .red()
-        )
+        match self.diagnostic {
+            Diagnostic::Violation(violation) => {
+                let path = violation.path().to_str().ok_or(Error)?;
+                write!(
+                    f,
+                    "{}",
+                    format!(
+                        "{}:{}:{} {}/{} {}",
+                        path,
+                        violation.position().start.line,
+                        violation.position().start.column,
+                        violation.name(),
+                        violation.alias(),
+                        violation.description()
+                    )
+                    .red()
+                )
+            }
+            Diagnostic::IoError(error) => {
+                let path = error.path().to_str().ok_or(Error)?;
+                write!(f, "{}{} {}", path.bold(), ":".blue(), error.message())
+            }
+            Diagnostic::LintError(error) => {
+                let path = error.path().to_str().ok_or(Error)?;
+                write!(f, "{}{} {}", path.bold(), ":".blue(), error.message())
+            }
+        }
     }
 }
 
@@ -53,7 +65,7 @@ impl PartialOrd for Markdownlint<'_> {
 impl Ord for Markdownlint<'_> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.violation.cmp(other.violation)
+        self.diagnostic.cmp(other.diagnostic)
     }
 }
 
@@ -64,7 +76,7 @@ mod tests {
     use comrak::nodes::Sourcepos;
     use pretty_assertions::assert_eq;
 
-    use crate::rule::Metadata;
+    use crate::{rule::Metadata, Violation};
 
     use super::*;
 
@@ -80,7 +92,8 @@ mod tests {
         let path = Path::new("file.md").to_path_buf();
         let position = Sourcepos::from((0, 1, 3, 5));
         let violation = Violation::new(path, &METADATA, position);
-        let actual = Markdownlint::new(&violation).to_string();
+        let diagnostic = Diagnostic::Violation(violation);
+        let actual = Markdownlint::new(&diagnostic).to_string();
         let expected = "\u{1b}[31mfile.md:0:1 name/alias description\u{1b}[0m";
         assert_eq!(actual, expected);
     }

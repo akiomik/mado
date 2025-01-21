@@ -55,35 +55,33 @@ impl Checker {
     #[inline]
     pub fn check(self) -> Result<ExitCode> {
         let runner = ParallelLintRunner::new(self.walker, self.config.clone(), 100);
-        let mut violations = runner.run()?;
-        violations.sort_by(self.config.lint.output_format.sorter());
+        let mut diagnostics = runner.run()?;
+        diagnostics.sort_by(self.config.lint.output_format.sorter());
 
-        if violations.is_empty() {
+        if diagnostics.is_empty() {
             if !self.config.lint.quiet {
                 println!("All checks passed!");
             }
-
-            return Ok(ExitCode::SUCCESS);
         }
 
         let mut output = BufWriter::new(io::stdout().lock());
-        let num_violations = violations.len();
-        for violation in violations {
+        let num_diagnostics = diagnostics.len();
+        for diagnostic in diagnostics {
             match self.config.lint.output_format {
                 Format::Concise => {
-                    writeln!(output, "{}", Concise::new(&violation)).into_diagnostic()?;
+                    writeln!(output, "{}", Concise::new(&diagnostic)).into_diagnostic()?;
                 }
-                Format::Mdl => writeln!(output, "{}", Mdl::new(&violation)).into_diagnostic()?,
+                Format::Mdl => writeln!(output, "{}", Mdl::new(&diagnostic)).into_diagnostic()?,
                 Format::Markdownlint => {
-                    writeln!(output, "{}", Markdownlint::new(&violation)).into_diagnostic()?;
+                    writeln!(output, "{}", Markdownlint::new(&diagnostic)).into_diagnostic()?;
                 }
             }
         }
 
-        if num_violations == 1 {
+        if num_diagnostics == 1 {
             writeln!(output, "\nFound 1 error.").into_diagnostic()?;
         } else {
-            writeln!(output, "\nFound {num_violations} errors.").into_diagnostic()?;
+            writeln!(output, "\nFound {num_diagnostics} errors.").into_diagnostic()?;
         }
 
         Ok(ExitCode::FAILURE)
