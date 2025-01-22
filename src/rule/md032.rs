@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD032 {
     const METADATA: Metadata = Metadata {
         name: "MD032",
         description: "Lists should be surrounded by blank lines",
-        tags: &["bullet", "ul", "ol", "blank_lines"],
+        tags: &[Tag::Bullet, Tag::Ul, Tag::Ol, Tag::BlankLines],
         aliases: &["blanks-around-lists"],
     };
 

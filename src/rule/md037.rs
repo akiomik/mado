@@ -6,7 +6,7 @@ use regex::Regex;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -16,7 +16,7 @@ impl MD037 {
     const METADATA: Metadata = Metadata {
         name: "MD037",
         description: "Spaces inside emphasis markers",
-        tags: &["whitespace", "emphasis"],
+        tags: &[Tag::Whitespace, Tag::Emphasis],
         aliases: &["no-space-in-emphasis"],
     };
 

@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD014 {
     const METADATA: Metadata = Metadata {
         name: "MD014",
         description: "Dollar signs used before commands without showing output",
-        tags: &["code"],
+        tags: &[Tag::Code],
         aliases: &["commands-show-output"],
     };
 

@@ -5,7 +5,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{helper::inline_text_of, Metadata, RuleLike};
+use super::{helper::inline_text_of, tag::Tag, Metadata, RuleLike};
 
 // TODO: Support allow_different_nesting
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -16,7 +16,7 @@ impl MD024 {
     const METADATA: Metadata = Metadata {
         name: "MD024",
         description: "Multiple headers with the same content",
-        tags: &["headers"],
+        tags: &[Tag::Headers],
         aliases: &["no-duplicate-header"],
     };
 

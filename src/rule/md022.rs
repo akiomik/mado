@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD022 {
     const METADATA: Metadata = Metadata {
         name: "MD022",
         description: "Headers should be surrounded by blank lines",
-        tags: &["headers", "blank_lines"],
+        tags: &[Tag::Headers, Tag::BlankLines],
         aliases: &["blanks-around-headers"],
     };
 

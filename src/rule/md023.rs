@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD023 {
     const METADATA: Metadata = Metadata {
         name: "MD023",
         description: "Headers must start at the beginning of the line",
-        tags: &["headers", "spaces"],
+        tags: &[Tag::Headers, Tag::Spaces],
         aliases: &["header-start-left"],
     };
 

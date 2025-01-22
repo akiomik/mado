@@ -45,6 +45,7 @@ mod md041;
 pub mod md046;
 mod md047;
 mod metadata;
+pub mod tag;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

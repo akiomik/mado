@@ -5,7 +5,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -15,7 +15,7 @@ impl MD028 {
     const METADATA: Metadata = Metadata {
         name: "MD028",
         description: "Blank line inside blockquote",
-        tags: &["blockquote", "whitespace"],
+        tags: &[Tag::Blockquote, Tag::Whitespace],
         aliases: &["no-blanks-blockquote"],
     };
 

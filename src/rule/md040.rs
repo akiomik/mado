@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD040 {
     const METADATA: Metadata = Metadata {
         name: "MD040",
         description: "Fenced code blocks should have a language specified",
-        tags: &["code", "language"],
+        tags: &[Tag::Code, Tag::Language],
         aliases: &["fenced-code-language"],
     };
 

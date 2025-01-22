@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD038 {
     const METADATA: Metadata = Metadata {
         name: "MD038",
         description: "Spaces inside code span elements",
-        tags: &["whitespace", "code"],
+        tags: &[Tag::Whitespace, Tag::Code],
         aliases: &["no-space-in-code"],
     };
 

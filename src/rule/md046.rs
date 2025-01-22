@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -25,7 +25,7 @@ impl MD046 {
     const METADATA: Metadata = Metadata {
         name: "MD046",
         description: "Code block style",
-        tags: &["code"],
+        tags: &[Tag::Code],
         aliases: &["code-block-style"],
     };
 

@@ -4,7 +4,7 @@ use miette::Result;
 use crate::violation::Violation;
 use crate::Document;
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -14,7 +14,7 @@ impl MD010 {
     const METADATA: Metadata = Metadata {
         name: "MD010",
         description: "Hard tabs",
-        tags: &["whitespace", "hard_tab"],
+        tags: &[Tag::Whitespace, Tag::HardTab],
         aliases: &["no-hard-tabs"],
     };
 

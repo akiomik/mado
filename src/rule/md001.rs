@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD001 {
     const METADATA: Metadata = Metadata {
         name: "MD001",
         description: "Header levels should only increment by one level at a time",
-        tags: &["headers"],
+        tags: &[Tag::Headers],
         aliases: &["header-increment"],
     };
 

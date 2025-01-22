@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -15,7 +15,7 @@ impl MD036 {
     const METADATA: Metadata = Metadata {
         name: "MD036",
         description: "Emphasis used instead of a header",
-        tags: &["headers", "emphasis"],
+        tags: &[Tag::Headers, Tag::Emphasis],
         aliases: &["no-emphasis-as-header"],
     };
 

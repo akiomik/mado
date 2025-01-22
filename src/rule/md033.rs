@@ -6,7 +6,7 @@ use scraper::Html;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -18,7 +18,7 @@ impl MD033 {
     const METADATA: Metadata = Metadata {
         name: "MD033",
         description: "Inline HTML",
-        tags: &["html"],
+        tags: &[Tag::Html],
         aliases: &["no-inline-html"],
     };
 

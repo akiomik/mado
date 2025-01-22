@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD031 {
     const METADATA: Metadata = Metadata {
         name: "MD031",
         description: "Fenced code blocks should be surrounded by blank lines",
-        tags: &["code", "blank_lines"],
+        tags: &[Tag::Code, Tag::BlankLines],
         aliases: &["blanks-around-fences"],
     };
 
