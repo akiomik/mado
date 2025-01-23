@@ -134,6 +134,51 @@ impl Rule {
             Self::MD047(rule) => rule.check(doc),
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub fn metadata(&self) -> &Metadata {
+        match self {
+            Self::MD001(rule) => rule.metadata(),
+            Self::MD002(rule) => rule.metadata(),
+            Self::MD003(rule) => rule.metadata(),
+            Self::MD004(rule) => rule.metadata(),
+            Self::MD005(rule) => rule.metadata(),
+            Self::MD006(rule) => rule.metadata(),
+            Self::MD007(rule) => rule.metadata(),
+            Self::MD009(rule) => rule.metadata(),
+            Self::MD010(rule) => rule.metadata(),
+            Self::MD012(rule) => rule.metadata(),
+            Self::MD013(rule) => rule.metadata(),
+            Self::MD014(rule) => rule.metadata(),
+            Self::MD018(rule) => rule.metadata(),
+            Self::MD019(rule) => rule.metadata(),
+            Self::MD020(rule) => rule.metadata(),
+            Self::MD021(rule) => rule.metadata(),
+            Self::MD022(rule) => rule.metadata(),
+            Self::MD023(rule) => rule.metadata(),
+            Self::MD024(rule) => rule.metadata(),
+            Self::MD025(rule) => rule.metadata(),
+            Self::MD026(rule) => rule.metadata(),
+            Self::MD027(rule) => rule.metadata(),
+            Self::MD028(rule) => rule.metadata(),
+            Self::MD029(rule) => rule.metadata(),
+            Self::MD030(rule) => rule.metadata(),
+            Self::MD031(rule) => rule.metadata(),
+            Self::MD032(rule) => rule.metadata(),
+            Self::MD033(rule) => rule.metadata(),
+            Self::MD034(rule) => rule.metadata(),
+            Self::MD035(rule) => rule.metadata(),
+            Self::MD036(rule) => rule.metadata(),
+            Self::MD037(rule) => rule.metadata(),
+            Self::MD038(rule) => rule.metadata(),
+            Self::MD039(rule) => rule.metadata(),
+            Self::MD040(rule) => rule.metadata(),
+            Self::MD041(rule) => rule.metadata(),
+            Self::MD046(rule) => rule.metadata(),
+            Self::MD047(rule) => rule.metadata(),
+        }
+    }
 }
 
 pub trait RuleLike: Send {
