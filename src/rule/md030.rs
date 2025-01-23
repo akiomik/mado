@@ -5,7 +5,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -20,7 +20,7 @@ impl MD030 {
     const METADATA: Metadata = Metadata {
         name: "MD030",
         description: "Spaces after list markers",
-        tags: &["ol", "ul", "whitespace"],
+        tags: &[Tag::Ol, Tag::Ul, Tag::Whitespace],
         aliases: &["list-marker-space"],
     };
 

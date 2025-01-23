@@ -72,7 +72,7 @@ mod tests {
     use comrak::nodes::Sourcepos;
     use pretty_assertions::assert_eq;
 
-    use crate::rule::Metadata;
+    use crate::rule::{tag::Tag, Metadata};
 
     use super::*;
 
@@ -80,7 +80,7 @@ mod tests {
         name: "name",
         description: "description",
         aliases: &["alias"],
-        tags: &["tags"],
+        tags: &[Tag::Atx],
     };
 
     #[test]

@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD009 {
     const METADATA: Metadata = Metadata {
         name: "MD009",
         description: "Trailing spaces",
-        tags: &["whitespace"],
+        tags: &[Tag::Whitespace],
         aliases: &["no-trailing-spaces"],
     };
 

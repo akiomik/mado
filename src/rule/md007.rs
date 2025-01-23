@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -15,7 +15,7 @@ impl MD007 {
     const METADATA: Metadata = Metadata {
         name: "MD007",
         description: "Unordered list indentation",
-        tags: &["bullet", "ul", "indentation"],
+        tags: &[Tag::Bullet, Tag::Ul, Tag::Indentation],
         aliases: &["ul-indent"],
     };
 

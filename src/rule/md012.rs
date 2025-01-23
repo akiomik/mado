@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{collection::RangeSet, violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD012 {
     const METADATA: Metadata = Metadata {
         name: "MD012",
         description: "Multiple consecutive blank lines",
-        tags: &["whitespace", "blank_lines"],
+        tags: &[Tag::Whitespace, Tag::BlankLines],
         aliases: &["no-multiple-blanks"],
     };
 

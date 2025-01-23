@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -41,7 +41,7 @@ impl MD035 {
     const METADATA: Metadata = Metadata {
         name: "MD035",
         description: "Horizontal rule style",
-        tags: &["hr"],
+        tags: &[Tag::Hr],
         aliases: &["hr-style"],
     };
 

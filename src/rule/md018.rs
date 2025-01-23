@@ -4,7 +4,7 @@ use miette::Result;
 use crate::violation::Violation;
 use crate::Document;
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -14,7 +14,7 @@ impl MD018 {
     const METADATA: Metadata = Metadata {
         name: "MD018",
         description: "No space after hash on atx style header",
-        tags: &["headers", "atx", "spaces"],
+        tags: &[Tag::Headers, Tag::Atx, Tag::Spaces],
         aliases: &["no-missing-space-atx"],
     };
 

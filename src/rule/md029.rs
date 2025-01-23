@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -26,7 +26,7 @@ impl MD029 {
     const METADATA: Metadata = Metadata {
         name: "MD029",
         description: "Ordered list item prefix",
-        tags: &["ol"],
+        tags: &[Tag::Ol],
         aliases: &["ol-prefix"],
     };
 

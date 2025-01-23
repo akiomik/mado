@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD047 {
     const METADATA: Metadata = Metadata {
         name: "MD047",
         description: "File should end with a single newline character",
-        tags: &["blank_lines"],
+        tags: &[Tag::BlankLines],
         aliases: &["single-trailing-newline"],
     };
 

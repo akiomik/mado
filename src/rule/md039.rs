@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +13,7 @@ impl MD039 {
     const METADATA: Metadata = Metadata {
         name: "MD039",
         description: "Spaces inside link text",
-        tags: &["whitespace", "links"],
+        tags: &[Tag::Whitespace, Tag::Links],
         aliases: &["no-space-in-links"],
     };
 

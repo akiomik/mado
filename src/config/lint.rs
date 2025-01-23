@@ -55,7 +55,104 @@ pub struct Lint {
     pub md046: MD046,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl Lint {
+    fn flatten_rules(&self) -> Vec<RuleSet> {
+        let mut flatten: Vec<_> = self
+            .rules
+            .iter()
+            .flat_map(|rule| match rule {
+                // TODO: Use rule::Metadata#tags
+                RuleSet::Atx => vec![RuleSet::MD018, RuleSet::MD019],
+                RuleSet::AtxClosed => vec![RuleSet::MD020, RuleSet::MD021],
+                RuleSet::BlankLines => vec![
+                    RuleSet::MD012,
+                    RuleSet::MD022,
+                    RuleSet::MD031,
+                    RuleSet::MD032,
+                    RuleSet::MD047,
+                ],
+                RuleSet::Blockquote => vec![RuleSet::MD027, RuleSet::MD028],
+                RuleSet::Bullet => vec![
+                    RuleSet::MD004,
+                    RuleSet::MD005,
+                    RuleSet::MD006,
+                    RuleSet::MD007,
+                    RuleSet::MD032,
+                ],
+                RuleSet::Code => vec![
+                    RuleSet::MD014,
+                    RuleSet::MD031,
+                    RuleSet::MD038,
+                    RuleSet::MD040,
+                    RuleSet::MD046,
+                ],
+                RuleSet::Emphasis => vec![RuleSet::MD036, RuleSet::MD037],
+                RuleSet::HardTab => vec![RuleSet::MD010],
+                RuleSet::Headers => vec![
+                    RuleSet::MD001,
+                    RuleSet::MD002,
+                    RuleSet::MD003,
+                    RuleSet::MD018,
+                    RuleSet::MD019,
+                    RuleSet::MD020,
+                    RuleSet::MD021,
+                    RuleSet::MD022,
+                    RuleSet::MD023,
+                    RuleSet::MD024,
+                    RuleSet::MD025,
+                    RuleSet::MD026,
+                    RuleSet::MD036,
+                    RuleSet::MD041,
+                ],
+                RuleSet::Hr => vec![RuleSet::MD035],
+                RuleSet::Html => vec![RuleSet::MD033],
+                RuleSet::Indentation => vec![
+                    RuleSet::MD005,
+                    RuleSet::MD006,
+                    RuleSet::MD007,
+                    RuleSet::MD027,
+                ],
+                RuleSet::Language => vec![RuleSet::MD040],
+                RuleSet::LineLength => vec![RuleSet::MD013],
+                RuleSet::Links => vec![RuleSet::MD034, RuleSet::MD039],
+                RuleSet::Ol => vec![RuleSet::MD029, RuleSet::MD030, RuleSet::MD032],
+                RuleSet::Spaces => vec![
+                    RuleSet::MD018,
+                    RuleSet::MD019,
+                    RuleSet::MD020,
+                    RuleSet::MD021,
+                    RuleSet::MD023,
+                ],
+                RuleSet::Ul => vec![
+                    RuleSet::MD004,
+                    RuleSet::MD005,
+                    RuleSet::MD006,
+                    RuleSet::MD007,
+                    RuleSet::MD030,
+                    RuleSet::MD032,
+                ],
+                RuleSet::Url => vec![RuleSet::MD034],
+                RuleSet::Whitespace => vec![
+                    RuleSet::MD009,
+                    RuleSet::MD010,
+                    RuleSet::MD012,
+                    RuleSet::MD027,
+                    RuleSet::MD028,
+                    RuleSet::MD030,
+                    RuleSet::MD037,
+                    RuleSet::MD038,
+                    RuleSet::MD039,
+                ],
+                ruleset => vec![ruleset.clone()],
+            })
+            .collect();
+        flatten.sort();
+        flatten.dedup();
+        flatten
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum RuleSet {
     MD001,
@@ -96,6 +193,46 @@ pub enum RuleSet {
     MD041,
     MD046,
     MD047,
+    #[serde(rename = "atx")]
+    Atx,
+    #[serde(rename = "atx-closed")]
+    AtxClosed,
+    #[serde(rename = "blank-lines")]
+    BlankLines,
+    #[serde(rename = "blockquote")]
+    Blockquote,
+    #[serde(rename = "bullet")]
+    Bullet,
+    #[serde(rename = "code")]
+    Code,
+    #[serde(rename = "emphasis")]
+    Emphasis,
+    #[serde(rename = "hard-tab")]
+    HardTab,
+    #[serde(rename = "headers")]
+    Headers,
+    #[serde(rename = "hr")]
+    Hr,
+    #[serde(rename = "html")]
+    Html,
+    #[serde(rename = "indentation")]
+    Indentation,
+    #[serde(rename = "language")]
+    Language,
+    #[serde(rename = "line-length")]
+    LineLength,
+    #[serde(rename = "links")]
+    Links,
+    #[serde(rename = "ol")]
+    Ol,
+    #[serde(rename = "spaces")]
+    Spaces,
+    #[serde(rename = "ul")]
+    Ul,
+    #[serde(rename = "url")]
+    Url,
+    #[serde(rename = "whitespace")]
+    Whitespace,
 }
 
 impl Default for Lint {
@@ -167,7 +304,7 @@ impl From<&Lint> for Vec<Rule> {
     #[must_use]
     fn from(config: &Lint) -> Self {
         config
-            .rules
+            .flatten_rules()
             .iter()
             .map(|rule| match rule {
                 RuleSet::MD001 => Rule::MD001(rule::MD001::new()),
@@ -208,6 +345,7 @@ impl From<&Lint> for Vec<Rule> {
                 RuleSet::MD041 => Rule::MD041(rule::MD041::from(&config.md041)),
                 RuleSet::MD046 => Rule::MD046(rule::MD046::from(&config.md046)),
                 RuleSet::MD047 => Rule::MD047(rule::MD047::new()),
+                _ => unreachable!("tags are flatten"),
             })
             .collect()
     }
@@ -216,6 +354,7 @@ impl From<&Lint> for Vec<Rule> {
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
+    use rule::tag::Tag;
 
     use super::*;
 
@@ -263,5 +402,150 @@ mod tests {
             Rule::MD047(rule::MD047::new()),
         ];
         assert_eq!(Vec::from(&config), expected);
+    }
+
+    #[test]
+    fn from_lint_for_vec_rule_unique() {
+        let config = Lint {
+            rules: vec![
+                RuleSet::MD001,
+                RuleSet::MD002,
+                RuleSet::MD003,
+                RuleSet::MD004,
+                RuleSet::MD005,
+                RuleSet::MD006,
+                RuleSet::MD007,
+                RuleSet::MD009,
+                RuleSet::MD010,
+                RuleSet::MD012,
+                RuleSet::MD013,
+                RuleSet::MD014,
+                RuleSet::MD018,
+                RuleSet::MD019,
+                RuleSet::MD020,
+                RuleSet::MD021,
+                RuleSet::MD022,
+                RuleSet::MD023,
+                RuleSet::MD024,
+                RuleSet::MD025,
+                RuleSet::MD026,
+                RuleSet::MD027,
+                RuleSet::MD028,
+                RuleSet::MD029,
+                RuleSet::MD030,
+                RuleSet::MD031,
+                RuleSet::MD032,
+                RuleSet::MD033,
+                RuleSet::MD034,
+                RuleSet::MD035,
+                RuleSet::MD036,
+                RuleSet::MD037,
+                RuleSet::MD038,
+                RuleSet::MD039,
+                RuleSet::MD040,
+                RuleSet::MD041,
+                RuleSet::MD046,
+                RuleSet::MD047,
+                RuleSet::Atx,
+                RuleSet::AtxClosed,
+                RuleSet::BlankLines,
+                RuleSet::Blockquote,
+                RuleSet::Bullet,
+                RuleSet::Code,
+                RuleSet::Emphasis,
+                RuleSet::HardTab,
+                RuleSet::Headers,
+                RuleSet::Hr,
+                RuleSet::Html,
+                RuleSet::Indentation,
+                RuleSet::Language,
+                RuleSet::LineLength,
+                RuleSet::Links,
+                RuleSet::Ol,
+                RuleSet::Spaces,
+                RuleSet::Ul,
+                RuleSet::Url,
+                RuleSet::Whitespace,
+            ],
+            ..Lint::default()
+        };
+        let expected = vec![
+            Rule::MD001(rule::MD001::new()),
+            Rule::MD002(rule::MD002::default()),
+            Rule::MD003(rule::MD003::default()),
+            Rule::MD004(rule::MD004::default()),
+            Rule::MD005(rule::MD005::new()),
+            Rule::MD006(rule::MD006::new()),
+            Rule::MD007(rule::MD007::default()),
+            Rule::MD009(rule::MD009::new()),
+            Rule::MD010(rule::MD010::new()),
+            Rule::MD012(rule::MD012::new()),
+            Rule::MD013(rule::MD013::default()),
+            Rule::MD014(rule::MD014::new()),
+            Rule::MD018(rule::MD018::new()),
+            Rule::MD019(rule::MD019::new()),
+            Rule::MD020(rule::MD020::new()),
+            Rule::MD021(rule::MD021::new()),
+            Rule::MD022(rule::MD022::new()),
+            Rule::MD023(rule::MD023::new()),
+            Rule::MD024(rule::MD024::new()),
+            Rule::MD025(rule::MD025::default()),
+            Rule::MD026(rule::MD026::default()),
+            Rule::MD027(rule::MD027::new()),
+            Rule::MD028(rule::MD028::new()),
+            Rule::MD029(rule::MD029::default()),
+            Rule::MD030(rule::MD030::default()),
+            Rule::MD031(rule::MD031::new()),
+            Rule::MD032(rule::MD032::new()),
+            Rule::MD033(rule::MD033::default()),
+            Rule::MD034(rule::MD034::new()),
+            Rule::MD035(rule::MD035::default()),
+            Rule::MD036(rule::MD036::default()),
+            Rule::MD037(rule::MD037::new()),
+            Rule::MD038(rule::MD038::new()),
+            Rule::MD039(rule::MD039::new()),
+            Rule::MD040(rule::MD040::new()),
+            Rule::MD041(rule::MD041::default()),
+            Rule::MD046(rule::MD046::default()),
+            Rule::MD047(rule::MD047::new()),
+        ];
+        assert_eq!(Vec::from(&config), expected);
+    }
+
+    #[test]
+    fn from_lint_for_vec_rule_tag_association() {
+        let ruleset_list = vec![
+            (RuleSet::Atx, Tag::Atx),
+            (RuleSet::AtxClosed, Tag::AtxClosed),
+            (RuleSet::BlankLines, Tag::BlankLines),
+            (RuleSet::Blockquote, Tag::Blockquote),
+            (RuleSet::Bullet, Tag::Bullet),
+            (RuleSet::Code, Tag::Code),
+            (RuleSet::Emphasis, Tag::Emphasis),
+            (RuleSet::HardTab, Tag::HardTab),
+            (RuleSet::Headers, Tag::Headers),
+            (RuleSet::Hr, Tag::Hr),
+            (RuleSet::Html, Tag::Html),
+            (RuleSet::Indentation, Tag::Indentation),
+            (RuleSet::Language, Tag::Language),
+            (RuleSet::LineLength, Tag::LineLength),
+            (RuleSet::Links, Tag::Links),
+            (RuleSet::Ol, Tag::Ol),
+            (RuleSet::Spaces, Tag::Spaces),
+            (RuleSet::Ul, Tag::Ul),
+            (RuleSet::Url, Tag::Url),
+            (RuleSet::Whitespace, Tag::Whitespace),
+        ];
+
+        for (ruleset, tag) in ruleset_list {
+            let config = Lint {
+                rules: vec![ruleset],
+                ..Lint::default()
+            };
+            let rules = Vec::from(&config);
+            for rule in rules {
+                assert!(rule.metadata().tags.contains(&tag));
+            }
+        }
     }
 }

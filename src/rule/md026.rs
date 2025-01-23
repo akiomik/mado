@@ -3,7 +3,7 @@ use miette::Result;
 
 use crate::{violation::Violation, Document};
 
-use super::{Metadata, RuleLike};
+use super::{tag::Tag, Metadata, RuleLike};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -15,7 +15,7 @@ impl MD026 {
     const METADATA: Metadata = Metadata {
         name: "MD026",
         description: "Trailing punctuation in header",
-        tags: &["headers"],
+        tags: &[Tag::Headers],
         aliases: &["no-trailing-punctuation"],
     };
 
