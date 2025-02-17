@@ -17,11 +17,13 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use std::process::ExitCode;
 
+use clap::CommandFactory as _;
 use clap::Parser as _;
 use mado::command::check::Options;
 use miette::Result;
 
 use mado::command::check::Checker;
+use mado::command::generate_shell_completion::ShellCompletionGenerator;
 use mado::Cli;
 use mado::Command;
 
@@ -44,6 +46,12 @@ fn main() -> Result<ExitCode> {
             let config = options.to_config()?;
             let checker = Checker::new(files, config)?;
             checker.check()
+        }
+        Some(Command::GenerateShellCompletion { shell }) => {
+            let cmd = Cli::command();
+            let mut generator = ShellCompletionGenerator::new(cmd);
+            generator.generate(*shell);
+            Ok(ExitCode::SUCCESS)
         }
         _ => Ok(ExitCode::FAILURE),
     }
