@@ -1,0 +1,6 @@
+ - id: mado
+   name: mado
+   description: A fast Markdown linter written in Rust.
+   entry: mado check
+   language: rust
+   types: [markdown]
