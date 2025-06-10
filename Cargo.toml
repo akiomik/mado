@@ -43,7 +43,7 @@ tikv-jemallocator = "0.6.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"
-criterion = "0.5"
+criterion = "0.6"
 indoc = "2"
 pretty_assertions = "1"
 rand = "0.9"
