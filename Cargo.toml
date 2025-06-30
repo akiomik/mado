@@ -23,7 +23,7 @@ exclude = [
 clap = { version = "4.5.40", features = ["derive"] }
 clap_complete = "4.5.54"
 colored = "3.0.0"
-comrak = "0.39.0"
+comrak = "0.39.1"
 etcetera = "0.10.0"
 globset = { version = "0.4.16", features = ["serde1"] }
 ignore = "0.4.23"
