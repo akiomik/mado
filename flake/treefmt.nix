@@ -2,6 +2,7 @@
   treefmt.programs = {
     nixfmt.enable = true;
     statix.enable = true;
+    deadnix.enable = true;
     taplo = {
       enable = true;
       settings = {

@@ -2,13 +2,15 @@
   description = "Flake for building Mado packages";
 
   inputs = {
-
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     treefmt-nix.url = "github:numtide/treefmt-nix";
-
+    nixpkgs-mozilla = {
+      url = "github:mozilla/nixpkgs-mozilla";
+      flake = false;
+    };
     flake-parts.url = "github:hercules-ci/flake-parts";
     devenv.url = "github:cachix/devenv";
-    # naersk.url = "";
+    naersk.url = "github:nix-community/naersk";
   };
 
   outputs =
@@ -24,7 +26,32 @@
         devenv.flakeModule
         treefmt-nix.flakeModule
       ];
-      perSystem.imports = [ ./flake ];
+      perSystem =
+        {
+          system,
+          ...
+        }:
+        let
+          pkgs = (import inputs.nixpkgs) {
+            inherit system;
+            overlays = [ (import inputs.nixpkgs-mozilla) ];
+          };
+          toolchain =
+            (pkgs.rustChannelOf {
+              rustToolchain = ./rust-toolchain.toml;
+              sha256 = "lMLAupxng4Fd9F1oDw8gx+qA0RuF7ou7xhNU8wgs0PU=";
+            }).rust;
+          naersk' = pkgs.callPackage inputs.naersk {
+            cargo = toolchain;
+            rustc = toolchain;
+          };
+        in
+        {
+          imports = [ ./flake ];
+          packages = {
+            default = naersk'.buildPackage { src = ./.; };
+          };
+        };
     };
   # flake-utils.lib.eachDefaultSystem (
   #   system:
