@@ -2,3 +2,7 @@
 flamegraph.svg
 /tmp
 /result
+.direnv/
+.devenv/
+**pre-commit-config.yaml**
+
