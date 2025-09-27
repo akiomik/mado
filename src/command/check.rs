@@ -71,7 +71,11 @@ impl Checker {
             Some(input) => {
                 LintRunner::String(Box::new(StringLintRunner::new(input, config.clone())))
             }
-            None => LintRunner::Parallel(ParallelLintRunner::new(patterns, config.clone(), 100)?),
+            None => LintRunner::Parallel(Box::new(ParallelLintRunner::new(
+                patterns,
+                config.clone(),
+                100,
+            )?)),
         };
 
         Ok(Self { runner, config })

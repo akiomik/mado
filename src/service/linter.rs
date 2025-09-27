@@ -26,17 +26,15 @@ impl Linter {
             Ok(unrolled)
         })
     }
-}
-
-impl From<&Config> for Linter {
     #[inline]
     #[must_use]
-    fn from(config: &Config) -> Self {
-        let rules = Vec::from(&config.lint);
-
+    pub fn from_config(config: &Config) -> Self {
+        let rules = config.lint.to_rules();
         Self { rules }
     }
 }
+
+// Note: prefer `Linter::from_config(&Config)` over From<&Config> impl.
 
 #[cfg(test)]
 mod tests {
@@ -81,7 +79,7 @@ mod tests {
         let rules = vec![RuleSet::MD026];
         let mut config = Config::default();
         config.lint.rules = rules;
-        let linter = Linter::from(&config);
+        let linter = Linter::from_config(&config);
         let expected = vec![Rule::MD026(md026)];
         assert_eq!(linter.rules, expected);
     }

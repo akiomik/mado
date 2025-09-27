@@ -24,6 +24,7 @@ use miette::Result;
 
 use mado::command::check::Checker;
 use mado::command::generate_shell_completion::ShellCompletionGenerator;
+use mado::command::CompletionShell;
 use mado::Cli;
 use mado::Command;
 
@@ -50,7 +51,29 @@ fn main() -> Result<ExitCode> {
         Command::GenerateShellCompletion { shell } => {
             let cmd = Cli::command();
             let mut generator = ShellCompletionGenerator::new(cmd);
-            generator.generate(*shell);
+            match shell {
+                CompletionShell::Bash => {
+                    generator.generate(clap_complete::Shell::Bash);
+                }
+                CompletionShell::Elvish => {
+                    generator.generate(clap_complete::Shell::Elvish);
+                }
+                CompletionShell::Fish => {
+                    generator.generate(clap_complete::Shell::Fish);
+                }
+                CompletionShell::Powershell => {
+                    generator.generate(clap_complete::Shell::PowerShell);
+                }
+                CompletionShell::Zsh => {
+                    generator.generate(clap_complete::Shell::Zsh);
+                }
+                CompletionShell::Nushell => {
+                    generator.generate(clap_complete_nushell::Nushell);
+                }
+                CompletionShell::Fig => {
+                    generator.generate(clap_complete_fig::Fig);
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
     }

@@ -320,25 +320,24 @@ impl Default for Lint {
     }
 }
 
-impl From<&Lint> for Vec<Rule> {
+impl Lint {
     #[inline]
     #[must_use]
-    fn from(config: &Lint) -> Self {
-        config
-            .flatten_rules()
+    pub fn to_rules(&self) -> Vec<Rule> {
+        self.flatten_rules()
             .iter()
             .map(|rule| match rule {
                 RuleSet::MD001 => Rule::MD001(rule::MD001::new()),
-                RuleSet::MD002 => Rule::MD002(rule::MD002::from(&config.md002)),
-                RuleSet::MD003 => Rule::MD003(rule::MD003::from(&config.md003)),
-                RuleSet::MD004 => Rule::MD004(rule::MD004::from(&config.md004)),
+                RuleSet::MD002 => Rule::MD002(rule::MD002::from(&self.md002)),
+                RuleSet::MD003 => Rule::MD003(rule::MD003::from(&self.md003)),
+                RuleSet::MD004 => Rule::MD004(rule::MD004::from(&self.md004)),
                 RuleSet::MD005 => Rule::MD005(rule::MD005::new()),
                 RuleSet::MD006 => Rule::MD006(rule::MD006::new()),
-                RuleSet::MD007 => Rule::MD007(rule::MD007::from(&config.md007)),
+                RuleSet::MD007 => Rule::MD007(rule::MD007::from(&self.md007)),
                 RuleSet::MD009 => Rule::MD009(rule::MD009::new()),
                 RuleSet::MD010 => Rule::MD010(rule::MD010::new()),
                 RuleSet::MD012 => Rule::MD012(rule::MD012::new()),
-                RuleSet::MD013 => Rule::MD013(rule::MD013::from(&config.md013)),
+                RuleSet::MD013 => Rule::MD013(rule::MD013::from(&self.md013)),
                 RuleSet::MD014 => Rule::MD014(rule::MD014::new()),
                 RuleSet::MD018 => Rule::MD018(rule::MD018::new()),
                 RuleSet::MD019 => Rule::MD019(rule::MD019::new()),
@@ -346,31 +345,33 @@ impl From<&Lint> for Vec<Rule> {
                 RuleSet::MD021 => Rule::MD021(rule::MD021::new()),
                 RuleSet::MD022 => Rule::MD022(rule::MD022::new()),
                 RuleSet::MD023 => Rule::MD023(rule::MD023::new()),
-                RuleSet::MD024 => Rule::MD024(rule::MD024::from(&config.md024)),
-                RuleSet::MD025 => Rule::MD025(rule::MD025::from(&config.md025)),
-                RuleSet::MD026 => Rule::MD026(rule::MD026::from(&config.md026)),
+                RuleSet::MD024 => Rule::MD024(rule::MD024::from(&self.md024)),
+                RuleSet::MD025 => Rule::MD025(rule::MD025::from(&self.md025)),
+                RuleSet::MD026 => Rule::MD026(rule::MD026::from(&self.md026)),
                 RuleSet::MD027 => Rule::MD027(rule::MD027::new()),
                 RuleSet::MD028 => Rule::MD028(rule::MD028::new()),
-                RuleSet::MD029 => Rule::MD029(rule::MD029::from(&config.md029)),
-                RuleSet::MD030 => Rule::MD030(rule::MD030::from(&config.md030)),
+                RuleSet::MD029 => Rule::MD029(rule::MD029::from(&self.md029)),
+                RuleSet::MD030 => Rule::MD030(rule::MD030::from(&self.md030)),
                 RuleSet::MD031 => Rule::MD031(rule::MD031::new()),
                 RuleSet::MD032 => Rule::MD032(rule::MD032::new()),
-                RuleSet::MD033 => Rule::MD033(rule::MD033::from(&config.md033)),
+                RuleSet::MD033 => Rule::MD033(rule::MD033::from(&self.md033)),
                 RuleSet::MD034 => Rule::MD034(rule::MD034::new()),
-                RuleSet::MD035 => Rule::MD035(rule::MD035::from(&config.md035)),
-                RuleSet::MD036 => Rule::MD036(rule::MD036::from(&config.md036)),
+                RuleSet::MD035 => Rule::MD035(rule::MD035::from(&self.md035)),
+                RuleSet::MD036 => Rule::MD036(rule::MD036::from(&self.md036)),
                 RuleSet::MD037 => Rule::MD037(rule::MD037::new()),
                 RuleSet::MD038 => Rule::MD038(rule::MD038::new()),
                 RuleSet::MD039 => Rule::MD039(rule::MD039::new()),
                 RuleSet::MD040 => Rule::MD040(rule::MD040::new()),
-                RuleSet::MD041 => Rule::MD041(rule::MD041::from(&config.md041)),
-                RuleSet::MD046 => Rule::MD046(rule::MD046::from(&config.md046)),
+                RuleSet::MD041 => Rule::MD041(rule::MD041::from(&self.md041)),
+                RuleSet::MD046 => Rule::MD046(rule::MD046::from(&self.md046)),
                 RuleSet::MD047 => Rule::MD047(rule::MD047::new()),
                 _ => unreachable!("tags are flatten"),
             })
             .collect()
     }
 }
+
+// Note: public conversion moved to inherent method `Lint::to_rules()`.
 
 #[cfg(test)]
 mod tests {
@@ -439,7 +440,7 @@ mod tests {
             Rule::MD046(rule::MD046::default()),
             Rule::MD047(rule::MD047::new()),
         ];
-        assert_eq!(Vec::from(&config), expected);
+        assert_eq!(config.to_rules(), expected);
     }
 
     #[test]
@@ -548,7 +549,7 @@ mod tests {
             Rule::MD046(rule::MD046::default()),
             Rule::MD047(rule::MD047::new()),
         ];
-        assert_eq!(Vec::from(&config), expected);
+        assert_eq!(config.to_rules(), expected);
     }
 
     #[test]
@@ -581,7 +582,7 @@ mod tests {
                 rules: vec![ruleset],
                 ..Lint::default()
             };
-            let rules = Vec::from(&config);
+            let rules = config.to_rules();
             for rule in rules {
                 assert!(rule.metadata().tags.contains(&tag));
             }

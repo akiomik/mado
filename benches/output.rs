@@ -1,3 +1,4 @@
+use core::fmt::Write as _;
 use core::hint::black_box;
 use std::io::BufWriter;
 use std::io::Write as _;
@@ -12,7 +13,7 @@ fn string_push_str_with_format(ss: &[String]) {
     let mut buf = String::new();
 
     for s in ss {
-        buf.push_str(&format!("{s}\n"));
+        let _ = writeln!(&mut buf, "{s}");
     }
 }
 
@@ -37,13 +38,12 @@ fn buf_writer_writeln(ss: &[String]) {
 }
 
 #[allow(clippy::unwrap_used)]
-#[allow(clippy::write_with_newline)]
 fn buf_writer_write(ss: &[String]) {
     let buf = vec![];
     let mut output = BufWriter::new(buf);
 
     for s in ss {
-        write!(output, "{s}\n").unwrap();
+        writeln!(output, "{s}").unwrap();
     }
 }
 
@@ -79,7 +79,7 @@ fn buf_writer_write_all_push_str(ss: &[String]) {
         let mut chunk_buf = String::new();
 
         for s in chunk {
-            chunk_buf.push_str(&format!("{s}\n"));
+            let _ = writeln!(&mut chunk_buf, "{s}");
         }
 
         output.write_all(chunk_buf.as_bytes()).unwrap();
@@ -95,7 +95,7 @@ fn buf_writer_write_all_append_with_format(ss: &[String]) {
         let mut chunk_buf = String::new();
 
         for s in chunk {
-            chunk_buf += &format!("{s}\n");
+            let _ = writeln!(&mut chunk_buf, "{s}");
         }
 
         output.write_all(chunk_buf.as_bytes()).unwrap();
