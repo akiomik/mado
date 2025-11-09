@@ -18,7 +18,7 @@ use crate::{Document, Violation};
 
 #[non_exhaustive]
 pub enum LintRunner {
-    Parallel(ParallelLintRunner),
+    Parallel(Box<ParallelLintRunner>),
     String(Box<StringLintRunner>),
 }
 
@@ -26,7 +26,7 @@ impl LintRunner {
     #[inline]
     pub fn run(self) -> Result<Vec<Violation>> {
         match self {
-            Self::Parallel(runner) => runner.run(),
+            Self::Parallel(runner) => (*runner).run(),
             Self::String(runner) => runner.run(),
         }
     }
@@ -106,7 +106,7 @@ impl StringLintRunner {
         let arena = Arena::new();
         let path = Path::new("(stdin)").to_path_buf();
         let doc = Document::new(&arena, path, self.string)?;
-        let linter = Linter::from(&self.config);
+        let linter = Linter::from_config(&self.config);
         linter.check(&doc)
     }
 }
