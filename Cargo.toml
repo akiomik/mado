@@ -25,7 +25,7 @@ clap_complete = "4.5.60"
 colored = "3.0.0"
 comrak = "0.41.0"
 etcetera = "0.10.0"
-globset = { version = "0.4.16", features = ["serde1"] }
+globset = { version = "0.4.18", features = ["serde1"] }
 ignore = "0.4.23"
 linkify = "0.10.0"
 miette = { version = "7.6.0", features = ["fancy"] }
