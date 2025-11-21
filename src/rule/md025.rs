@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -49,15 +49,15 @@ impl RuleLike for MD025 {
         let mut seen_top_level_header = false;
 
         for node in doc.ast.children() {
-            if let NodeValue::Heading(heading) = node.data.borrow().value {
-                if heading.level == self.level {
-                    if seen_top_level_header {
-                        let position = node.data.borrow().sourcepos;
-                        let violation = self.to_violation(doc.path.clone(), position);
-                        violations.push(violation);
-                    } else {
-                        seen_top_level_header = true;
-                    }
+            if let NodeValue::Heading(heading) = node.data.borrow().value
+                && heading.level == self.level
+            {
+                if seen_top_level_header {
+                    let position = node.data.borrow().sourcepos;
+                    let violation = self.to_violation(doc.path.clone(), position);
+                    violations.push(violation);
+                } else {
+                    seen_top_level_header = true;
                 }
             }
         }
@@ -70,7 +70,7 @@ impl RuleLike for MD025 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

@@ -322,7 +322,6 @@ impl Default for Lint {
 
 impl From<&Lint> for Vec<Rule> {
     #[inline]
-    #[must_use]
     fn from(config: &Lint) -> Self {
         config
             .flatten_rules()

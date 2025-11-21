@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use comrak::nodes::Sourcepos;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 mod helper;
 mod md001;

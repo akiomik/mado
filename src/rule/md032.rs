@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -38,21 +38,20 @@ impl RuleLike for MD032 {
             // Check Paragraph in Item
             if let (NodeValue::List(_), Some(item_node)) =
                 (&node.data.borrow().value, node.last_child())
+                && let Some(block_node) = item_node.last_child()
             {
-                if let Some(block_node) = item_node.last_child() {
-                    for inline_node in block_node.descendants() {
-                        let inline_position = inline_node.data.borrow().sourcepos;
-                        if inline_position.start.column == 1 {
-                            // TODO: Improve position
-                            let mut bottom_position = inline_position;
-                            bottom_position.end.line = bottom_position.start.line;
-                            bottom_position.end.column = 0;
-                            bottom_position.start.line -= 1;
+                for inline_node in block_node.descendants() {
+                    let inline_position = inline_node.data.borrow().sourcepos;
+                    if inline_position.start.column == 1 {
+                        // TODO: Improve position
+                        let mut bottom_position = inline_position;
+                        bottom_position.end.line = bottom_position.start.line;
+                        bottom_position.end.column = 0;
+                        bottom_position.start.line -= 1;
 
-                            let violation = self.to_violation(doc.path.clone(), bottom_position);
-                            violations.push(violation);
-                            continue 'node_loop;
-                        }
+                        let violation = self.to_violation(doc.path.clone(), bottom_position);
+                        violations.push(violation);
+                        continue 'node_loop;
                     }
                 }
             }
@@ -61,29 +60,27 @@ impl RuleLike for MD032 {
                 let position = node.data.borrow().sourcepos;
                 let prev_position = prev_node.data.borrow().sourcepos;
 
-                if let NodeValue::List(_) = prev_node.data.borrow().value {
-                    if position.start.line == prev_position.end.line + 1
-                        && prev_position.end.column != 0
-                    {
-                        let mut bottom_position = prev_position;
-                        bottom_position.start.line = bottom_position.end.line;
-                        let violation = self.to_violation(doc.path.clone(), bottom_position);
-                        violations.push(violation);
-                        continue;
-                    }
+                if let NodeValue::List(_) = prev_node.data.borrow().value
+                    && position.start.line == prev_position.end.line + 1
+                    && prev_position.end.column != 0
+                {
+                    let mut bottom_position = prev_position;
+                    bottom_position.start.line = bottom_position.end.line;
+                    let violation = self.to_violation(doc.path.clone(), bottom_position);
+                    violations.push(violation);
+                    continue;
                 }
 
-                if let NodeValue::List(_) = node.data.borrow().value {
-                    if position.start.line == prev_position.end.line + 1
-                        && prev_position.end.column != 0
-                    {
-                        let mut top_position = position;
-                        if position.end.column == 0 {
-                            top_position.end.line = position.start.line + 1;
-                        }
-                        let violation = self.to_violation(doc.path.clone(), top_position);
-                        violations.push(violation);
+                if let NodeValue::List(_) = node.data.borrow().value
+                    && position.start.line == prev_position.end.line + 1
+                    && prev_position.end.column != 0
+                {
+                    let mut top_position = position;
+                    if position.end.column == 0 {
+                        top_position.end.line = position.start.line + 1;
                     }
+                    let violation = self.to_violation(doc.path.clone(), top_position);
+                    violations.push(violation);
                 }
             }
         }
@@ -96,7 +93,7 @@ impl RuleLike for MD032 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

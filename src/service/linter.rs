@@ -1,9 +1,9 @@
 use miette::Result;
 
-use crate::config::Config;
-use crate::violation::Violation;
 use crate::Document;
 use crate::Rule;
+use crate::config::Config;
+use crate::violation::Violation;
 
 #[derive(Default)]
 pub struct Linter {
@@ -30,7 +30,6 @@ impl Linter {
 
 impl From<&Config> for Linter {
     #[inline]
-    #[must_use]
     fn from(config: &Config) -> Self {
         let rules = Vec::from(&config.lint);
 
@@ -42,13 +41,13 @@ impl From<&Config> for Linter {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 
     use crate::config::lint::RuleSet;
-    use crate::rule::RuleLike as _;
     use crate::rule::MD026;
+    use crate::rule::RuleLike as _;
 
     use super::*;
 

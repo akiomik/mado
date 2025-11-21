@@ -1,7 +1,7 @@
 use comrak::nodes::{NodeCodeBlock, NodeValue};
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -41,28 +41,24 @@ impl RuleLike for MD031 {
 
                 if let NodeValue::CodeBlock(NodeCodeBlock { fenced: true, .. }) =
                     &prev_node.data.borrow().value
+                    && position.start.line == prev_position.end.line + 1
+                    && prev_position.end.column != 0
                 {
-                    if position.start.line == prev_position.end.line + 1
-                        && prev_position.end.column != 0
-                    {
-                        let mut fence_position = prev_position;
-                        fence_position.start.line = fence_position.end.line;
-                        let violation = self.to_violation(doc.path.clone(), fence_position);
-                        violations.push(violation);
-                    }
+                    let mut fence_position = prev_position;
+                    fence_position.start.line = fence_position.end.line;
+                    let violation = self.to_violation(doc.path.clone(), fence_position);
+                    violations.push(violation);
                 }
 
                 if let NodeValue::CodeBlock(NodeCodeBlock { fenced: true, .. }) =
                     &node.data.borrow().value
+                    && position.start.line == prev_position.end.line + 1
+                    && prev_position.end.column != 0
                 {
-                    if position.start.line == prev_position.end.line + 1
-                        && prev_position.end.column != 0
-                    {
-                        let mut fence_position = position;
-                        fence_position.end.line = fence_position.start.line;
-                        let violation = self.to_violation(doc.path.clone(), fence_position);
-                        violations.push(violation);
-                    }
+                    let mut fence_position = position;
+                    fence_position.end.line = fence_position.start.line;
+                    let violation = self.to_violation(doc.path.clone(), fence_position);
+                    violations.push(violation);
                 }
             }
         }
@@ -75,7 +71,7 @@ impl RuleLike for MD031 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

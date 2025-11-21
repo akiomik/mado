@@ -15,7 +15,7 @@ pub fn inline_text_of<'a>(root: &'a AstNode<'a>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use comrak::{parse_document, Arena, Options};
+    use comrak::{Arena, Options, parse_document};
     use miette::{Context as _, Result};
     use pretty_assertions::assert_eq;
 

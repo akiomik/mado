@@ -1,11 +1,11 @@
 use core::hint::black_box;
 
+use comrak::Arena;
+use comrak::Options;
 use comrak::nodes::AstNode;
 use comrak::nodes::NodeValue;
 use comrak::parse_document;
-use comrak::Arena;
-use comrak::Options;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn recursive<'a>(root: &'a AstNode<'a>, texts: &mut Vec<String>) {
     for node in root.children() {

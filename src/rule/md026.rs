@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -48,18 +48,15 @@ impl RuleLike for MD026 {
         let mut violations = vec![];
 
         for node in doc.ast.children() {
-            if let NodeValue::Heading(_) = node.data.borrow().value {
-                if let Some(child) = node.last_child() {
-                    if let NodeValue::Text(text) = &child.data.borrow().value {
-                        if let Some(last_char) = text.chars().last() {
-                            if self.punctuation.contains(last_char) {
-                                let position = node.data.borrow().sourcepos;
-                                let violation = self.to_violation(doc.path.clone(), position);
-                                violations.push(violation);
-                            }
-                        }
-                    }
-                }
+            if let NodeValue::Heading(_) = node.data.borrow().value
+                && let Some(child) = node.last_child()
+                && let NodeValue::Text(text) = &child.data.borrow().value
+                && let Some(last_char) = text.chars().last()
+                && self.punctuation.contains(last_char)
+            {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(doc.path.clone(), position);
+                violations.push(violation);
             }
         }
 
@@ -71,7 +68,7 @@ impl RuleLike for MD026 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use pretty_assertions::assert_eq;
 
     use super::*;

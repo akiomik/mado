@@ -5,8 +5,8 @@ use miette::Result;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::violation::Violation;
 use crate::Document;
+use crate::violation::Violation;
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -133,7 +133,7 @@ impl RuleLike for MD004 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

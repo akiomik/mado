@@ -1,7 +1,7 @@
 use comrak::nodes::{NodeValue, Sourcepos};
 use miette::Result;
 
-use crate::{collection::RangeSet, violation::Violation, Document};
+use crate::{Document, collection::RangeSet, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -48,12 +48,14 @@ impl RuleLike for MD012 {
         for (i, line) in doc.lines.iter().enumerate() {
             let lineno = i + 1;
 
-            if let Some(prev_line) = maybe_prev_line {
-                if prev_line.is_empty() && line.is_empty() && !code_block_ranges.contains(&lineno) {
-                    let position = Sourcepos::from((lineno, 1, lineno, 1));
-                    let violation = self.to_violation(doc.path.clone(), position);
-                    violations.push(violation);
-                }
+            if let Some(prev_line) = maybe_prev_line
+                && prev_line.is_empty()
+                && line.is_empty()
+                && !code_block_ranges.contains(&lineno)
+            {
+                let position = Sourcepos::from((lineno, 1, lineno, 1));
+                let violation = self.to_violation(doc.path.clone(), position);
+                violations.push(violation);
             }
 
             maybe_prev_line = Some(line);

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use comrak::nodes::{AstNode, NodeValue, Sourcepos};
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -32,21 +32,16 @@ impl MD028 {
         violations: &mut Vec<Violation>,
     ) {
         for node in root.children() {
-            if let Some(prev_node) = node.previous_sibling() {
-                if (&prev_node.data.borrow().value, &node.data.borrow().value)
+            if let Some(prev_node) = node.previous_sibling()
+                && (&prev_node.data.borrow().value, &node.data.borrow().value)
                     == (&NodeValue::BlockQuote, &NodeValue::BlockQuote)
-                {
-                    let prev_position = prev_node.data.borrow().sourcepos;
-                    let position = node.data.borrow().sourcepos;
-                    let blank_line_position = Sourcepos::from((
-                        prev_position.end.line + 1,
-                        1,
-                        position.start.line - 1,
-                        1,
-                    ));
-                    let violation = self.to_violation(path.clone(), blank_line_position);
-                    violations.push(violation);
-                }
+            {
+                let prev_position = prev_node.data.borrow().sourcepos;
+                let position = node.data.borrow().sourcepos;
+                let blank_line_position =
+                    Sourcepos::from((prev_position.end.line + 1, 1, position.start.line - 1, 1));
+                let violation = self.to_violation(path.clone(), blank_line_position);
+                violations.push(violation);
             }
 
             if let NodeValue::List(_) = node.data.borrow().value {
@@ -78,7 +73,7 @@ impl RuleLike for MD028 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

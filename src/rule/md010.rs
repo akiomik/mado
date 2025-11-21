@@ -1,8 +1,8 @@
 use comrak::nodes::Sourcepos;
 use miette::Result;
 
-use crate::violation::Violation;
 use crate::Document;
+use crate::violation::Violation;
 
 use super::{Metadata, RuleLike, Tag};
 

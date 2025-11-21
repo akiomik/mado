@@ -7,9 +7,9 @@ use globset::Glob;
 use miette::IntoDiagnostic as _;
 use miette::Result;
 
+use crate::Config;
 use crate::output::{Concise, Format, Markdownlint, Mdl};
 use crate::service::runner::{LintRunner, ParallelLintRunner, StringLintRunner};
-use crate::Config;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::exhaustive_structs)]
@@ -71,7 +71,11 @@ impl Checker {
             Some(input) => {
                 LintRunner::String(Box::new(StringLintRunner::new(input, config.clone())))
             }
-            None => LintRunner::Parallel(ParallelLintRunner::new(patterns, config.clone(), 100)?),
+            None => LintRunner::Parallel(Box::new(ParallelLintRunner::new(
+                patterns,
+                config.clone(),
+                100,
+            )?)),
         };
 
         Ok(Self { runner, config })

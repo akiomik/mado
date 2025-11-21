@@ -2,7 +2,7 @@ use comrak::nodes::NodeValue;
 use miette::Result;
 use rustc_hash::FxHashSet;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -36,49 +36,48 @@ impl RuleLike for MD027 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            if node.data.borrow().value == NodeValue::BlockQuote {
-                if let Some(child_node) = node.first_child() {
-                    match &child_node.data.borrow().value {
-                        NodeValue::Paragraph => {
-                            let mut lines = FxHashSet::default();
-                            for inline_node in child_node.children() {
-                                let block_quote_position = node.data.borrow().sourcepos;
-                                let inline_position = inline_node.data.borrow().sourcepos;
-                                let lineno = inline_position.start.line;
-                                let expected_column = block_quote_position.start.column + 2;
+            if node.data.borrow().value == NodeValue::BlockQuote
+                && let Some(child_node) = node.first_child()
+            {
+                match &child_node.data.borrow().value {
+                    NodeValue::Paragraph => {
+                        let mut lines = FxHashSet::default();
+                        for inline_node in child_node.children() {
+                            let block_quote_position = node.data.borrow().sourcepos;
+                            let inline_position = inline_node.data.borrow().sourcepos;
+                            let lineno = inline_position.start.line;
+                            let expected_column = block_quote_position.start.column + 2;
 
-                                if inline_position.start.column > expected_column
-                                    && !lines.contains(&lineno)
-                                {
-                                    let violation =
-                                        self.to_violation(doc.path.clone(), inline_position);
-                                    violations.push(violation);
-                                }
-
-                                lines.insert(lineno);
-                            }
-                        }
-                        NodeValue::List(_) => {
-                            for item_node in child_node.children() {
-                                let block_quote_position = node.data.borrow().sourcepos;
-                                let item_position = item_node.data.borrow().sourcepos;
-                                let expected_column = block_quote_position.start.column + 2;
-
-                                if item_position.start.column > expected_column {
-                                    let violation =
-                                        self.to_violation(doc.path.clone(), item_position);
-                                    violations.push(violation);
-                                }
-                            }
-                        }
-                        _ => {
-                            // TODO: Support multi-line errors
-                            let parent_position = node.data.borrow().sourcepos;
-                            let child_position = child_node.data.borrow().sourcepos;
-                            if child_position.start.column > parent_position.start.column + 2 {
-                                let violation = self.to_violation(doc.path.clone(), child_position);
+                            if inline_position.start.column > expected_column
+                                && !lines.contains(&lineno)
+                            {
+                                let violation =
+                                    self.to_violation(doc.path.clone(), inline_position);
                                 violations.push(violation);
                             }
+
+                            lines.insert(lineno);
+                        }
+                    }
+                    NodeValue::List(_) => {
+                        for item_node in child_node.children() {
+                            let block_quote_position = node.data.borrow().sourcepos;
+                            let item_position = item_node.data.borrow().sourcepos;
+                            let expected_column = block_quote_position.start.column + 2;
+
+                            if item_position.start.column > expected_column {
+                                let violation = self.to_violation(doc.path.clone(), item_position);
+                                violations.push(violation);
+                            }
+                        }
+                    }
+                    _ => {
+                        // TODO: Support multi-line errors
+                        let parent_position = node.data.borrow().sourcepos;
+                        let child_position = child_node.data.borrow().sourcepos;
+                        if child_position.start.column > parent_position.start.column + 2 {
+                            let violation = self.to_violation(doc.path.clone(), child_position);
+                            violations.push(violation);
                         }
                     }
                 }
@@ -93,7 +92,7 @@ impl RuleLike for MD027 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 
