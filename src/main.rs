@@ -22,10 +22,10 @@ use clap::Parser as _;
 use mado::command::check::Options;
 use miette::Result;
 
-use mado::command::check::Checker;
-use mado::command::generate_shell_completion::ShellCompletionGenerator;
 use mado::Cli;
 use mado::Command;
+use mado::command::check::Checker;
+use mado::command::generate_shell_completion::ShellCompletionGenerator;
 
 fn main() -> Result<ExitCode> {
     let cli = Cli::parse();

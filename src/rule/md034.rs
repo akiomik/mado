@@ -2,7 +2,7 @@ use comrak::nodes::NodeValue;
 use linkify::LinkFinder;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -41,10 +41,10 @@ impl RuleLike for MD034 {
         for node in doc.ast.descendants() {
             if let NodeValue::Text(text) = &node.data.borrow().value {
                 for link in finder.links(text) {
-                    if let Some(parent) = node.parent() {
-                        if let NodeValue::Link(_) = parent.data.borrow().value {
-                            continue;
-                        }
+                    if let Some(parent) = node.parent()
+                        && let NodeValue::Link(_) = parent.data.borrow().value
+                    {
+                        continue;
                     }
 
                     // NOTE: link.start and link.end start from 0
@@ -66,7 +66,7 @@ impl RuleLike for MD034 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use pretty_assertions::assert_eq;
 
     use super::*;

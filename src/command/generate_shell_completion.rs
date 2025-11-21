@@ -1,7 +1,7 @@
 use std::io;
 
 use clap::Command;
-use clap_complete::{generate, Generator};
+use clap_complete::{Generator, generate};
 
 #[derive(Debug, Clone)]
 pub struct ShellCompletionGenerator {
@@ -16,8 +16,8 @@ impl ShellCompletionGenerator {
     }
 
     #[inline]
-    pub fn generate<G: Generator>(&mut self, gen: G) {
+    pub fn generate<G: Generator>(&mut self, generator: G) {
         let name = self.cmd.get_name().to_owned();
-        generate(gen, &mut self.cmd, name, &mut io::stdout());
+        generate(generator, &mut self.cmd, name, &mut io::stdout());
     }
 }

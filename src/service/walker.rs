@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use ignore::types::TypesBuilder;
 use ignore::WalkBuilder;
 use ignore::WalkParallel;
-use miette::miette;
+use ignore::types::TypesBuilder;
 use miette::IntoDiagnostic as _;
 use miette::Result;
+use miette::miette;
 
 #[non_exhaustive]
 pub struct WalkParallelBuilder;
@@ -71,10 +71,10 @@ mod tests {
             let paths = Arc::clone(&self.paths);
 
             move |either_entry: Result<DirEntry, _>| {
-                if let Ok(entry) = either_entry {
-                    if let Ok(mut paths) = paths.lock() {
-                        paths.push(entry.into_path());
-                    }
+                if let Ok(entry) = either_entry
+                    && let Ok(mut paths) = paths.lock()
+                {
+                    paths.push(entry.into_path());
                 }
 
                 WalkState::Continue

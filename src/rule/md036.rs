@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -53,27 +53,25 @@ impl RuleLike for MD036 {
                     continue;
                 }
 
-                if let Some(child_node) = node.first_child() {
-                    if let NodeValue::Emph | NodeValue::Strong = &child_node.data.borrow().value {
-                        let position = node.data.borrow().sourcepos;
-                        if position.end.line > position.start.line {
-                            continue;
-                        }
+                if let Some(child_node) = node.first_child()
+                    && let NodeValue::Emph | NodeValue::Strong = &child_node.data.borrow().value
+                {
+                    let position = node.data.borrow().sourcepos;
+                    if position.end.line > position.start.line {
+                        continue;
+                    }
 
-                        if position.start.column > 1 {
-                            continue;
-                        }
+                    if position.start.column > 1 {
+                        continue;
+                    }
 
-                        for inline_node in child_node.children() {
-                            if let NodeValue::Text(text) = &inline_node.data.borrow().value {
-                                if let Some(last_char) = text.chars().last() {
-                                    if !self.punctuation.contains(last_char) {
-                                        let violation =
-                                            self.to_violation(doc.path.clone(), position);
-                                        violations.push(violation);
-                                    }
-                                }
-                            }
+                    for inline_node in child_node.children() {
+                        if let NodeValue::Text(text) = &inline_node.data.borrow().value
+                            && let Some(last_char) = text.chars().last()
+                            && !self.punctuation.contains(last_char)
+                        {
+                            let violation = self.to_violation(doc.path.clone(), position);
+                            violations.push(violation);
                         }
                     }
                 }
@@ -88,7 +86,7 @@ impl RuleLike for MD036 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

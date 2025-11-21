@@ -4,7 +4,7 @@ use comrak::nodes::NodeValue;
 use miette::Result;
 use regex::Regex;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -45,23 +45,23 @@ impl RuleLike for MD037 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            if let NodeValue::Text(text) = &node.data.borrow().value {
-                if let Some(m) = RE.find(text) {
-                    let mut position = node.data.borrow().sourcepos;
+            if let NodeValue::Text(text) = &node.data.borrow().value
+                && let Some(m) = RE.find(text)
+            {
+                let mut position = node.data.borrow().sourcepos;
 
-                    if m.as_str().starts_with(' ') {
-                        // When a start marker matches
-                        position.end = position.start.column_add(m.end() as isize - 1);
-                        position.start = position.start.column_add(m.start() as isize + 1);
-                    } else {
-                        // When an end marker matches
-                        position.end = position.start.column_add(m.end() as isize - 2);
-                        position.start = position.start.column_add(m.start() as isize);
-                    }
-
-                    let violation = self.to_violation(doc.path.clone(), position);
-                    violations.push(violation);
+                if m.as_str().starts_with(' ') {
+                    // When a start marker matches
+                    position.end = position.start.column_add(m.end() as isize - 1);
+                    position.start = position.start.column_add(m.start() as isize + 1);
+                } else {
+                    // When an end marker matches
+                    position.end = position.start.column_add(m.end() as isize - 2);
+                    position.start = position.start.column_add(m.start() as isize);
                 }
+
+                let violation = self.to_violation(doc.path.clone(), position);
+                violations.push(violation);
             }
         }
 
@@ -73,7 +73,7 @@ impl RuleLike for MD037 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

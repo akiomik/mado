@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use comrak::nodes::{AstNode, NodeValue};
-use comrak::{parse_document, Arena, Options};
+use comrak::{Arena, Options, parse_document};
 use miette::IntoDiagnostic as _;
 use miette::Result;
 
@@ -41,10 +41,10 @@ impl<'a> Document<'a> {
     #[inline]
     #[must_use]
     pub fn front_matter(&self) -> Option<String> {
-        if let Some(node) = self.ast.first_child() {
-            if let NodeValue::FrontMatter(front_matter) = &node.data.borrow().value {
-                return Some(front_matter.clone());
-            }
+        if let Some(node) = self.ast.first_child()
+            && let NodeValue::FrontMatter(front_matter) = &node.data.borrow().value
+        {
+            return Some(front_matter.clone());
         }
 
         None

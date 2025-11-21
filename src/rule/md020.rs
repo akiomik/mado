@@ -1,8 +1,8 @@
 use comrak::nodes::{NodeHeading, NodeValue};
 use miette::Result;
 
-use crate::violation::Violation;
 use crate::Document;
+use crate::violation::Violation;
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -52,16 +52,13 @@ impl RuleLike for MD020 {
             }
 
             if let NodeValue::Heading(NodeHeading { setext: false, .. }) = node.data.borrow().value
+                && let Some(child_node) = node.last_child()
+                && let NodeValue::Text(text) = &child_node.data.borrow().value
+                && text.ends_with('#')
             {
-                if let Some(child_node) = node.last_child() {
-                    if let NodeValue::Text(text) = &child_node.data.borrow().value {
-                        if text.ends_with('#') {
-                            let position = node.data.borrow().sourcepos;
-                            let violation = self.to_violation(doc.path.clone(), position);
-                            violations.push(violation);
-                        }
-                    }
-                }
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(doc.path.clone(), position);
+                violations.push(violation);
             }
         }
 
@@ -73,7 +70,7 @@ impl RuleLike for MD020 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

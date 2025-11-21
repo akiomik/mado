@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -36,25 +36,23 @@ impl RuleLike for MD039 {
 
         for node in doc.ast.descendants() {
             if let NodeValue::Link(_) = node.data.borrow().value {
-                if let Some(text_node) = node.first_child() {
-                    if let NodeValue::Text(text) = &text_node.data.borrow().value {
-                        if text.trim_start() != text {
-                            let position = text_node.data.borrow().sourcepos;
-                            let violation = self.to_violation(doc.path.clone(), position);
-                            violations.push(violation);
-                            continue;
-                        }
-                    }
+                if let Some(text_node) = node.first_child()
+                    && let NodeValue::Text(text) = &text_node.data.borrow().value
+                    && text.trim_start() != text
+                {
+                    let position = text_node.data.borrow().sourcepos;
+                    let violation = self.to_violation(doc.path.clone(), position);
+                    violations.push(violation);
+                    continue;
                 }
 
-                if let Some(text_node) = node.last_child() {
-                    if let NodeValue::Text(text) = &text_node.data.borrow().value {
-                        if text.trim_end() != text {
-                            let position = text_node.data.borrow().sourcepos;
-                            let violation = self.to_violation(doc.path.clone(), position);
-                            violations.push(violation);
-                        }
-                    }
+                if let Some(text_node) = node.last_child()
+                    && let NodeValue::Text(text) = &text_node.data.borrow().value
+                    && text.trim_end() != text
+                {
+                    let position = text_node.data.borrow().sourcepos;
+                    let violation = self.to_violation(doc.path.clone(), position);
+                    violations.push(violation);
                 }
             }
         }
@@ -67,7 +65,7 @@ impl RuleLike for MD039 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

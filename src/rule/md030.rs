@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use comrak::nodes::{AstNode, ListType, NodeValue};
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -54,14 +54,13 @@ impl MD030 {
                         let mut is_multi = item_node.children().count() > 1;
 
                         // Check for single Paragraph with multiple lines
-                        if !is_multi {
-                            if let Some(child_node) = item_node.first_child() {
-                                if child_node.data.borrow().value == NodeValue::Paragraph {
-                                    for inline_node in child_node.children() {
-                                        if inline_node.data.borrow().value == NodeValue::SoftBreak {
-                                            is_multi = true;
-                                        }
-                                    }
+                        if !is_multi
+                            && let Some(child_node) = item_node.first_child()
+                            && child_node.data.borrow().value == NodeValue::Paragraph
+                        {
+                            for inline_node in child_node.children() {
+                                if inline_node.data.borrow().value == NodeValue::SoftBreak {
+                                    is_multi = true;
                                 }
                             }
                         }
@@ -119,7 +118,7 @@ impl RuleLike for MD030 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

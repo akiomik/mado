@@ -1,7 +1,7 @@
 use comrak::nodes::{ListType, NodeList, NodeValue};
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -41,12 +41,12 @@ impl RuleLike for MD006 {
             }) = node.data.borrow().value
             {
                 for item_node in node.children() {
-                    if let NodeValue::Item(item) = item_node.data.borrow().value {
-                        if item.marker_offset > 0 {
-                            let position = item_node.data.borrow().sourcepos;
-                            let violation = self.to_violation(doc.path.clone(), position);
-                            violations.push(violation);
-                        }
+                    if let NodeValue::Item(item) = item_node.data.borrow().value
+                        && item.marker_offset > 0
+                    {
+                        let position = item_node.data.borrow().sourcepos;
+                        let violation = self.to_violation(doc.path.clone(), position);
+                        violations.push(violation);
                     }
                 }
             }
@@ -60,7 +60,7 @@ impl RuleLike for MD006 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

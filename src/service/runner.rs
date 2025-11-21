@@ -3,22 +3,22 @@ extern crate alloc;
 use alloc::sync::Arc;
 use comrak::Arena;
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, mpsc};
 use std::thread;
 
 use ignore::WalkParallel;
 use miette::miette;
 use miette::{IntoDiagnostic as _, Result};
 
+use super::Linter;
 use super::visitor::MarkdownLintVisitorFactory;
 use super::walker::WalkParallelBuilder;
-use super::Linter;
 use crate::config::Config;
 use crate::{Document, Violation};
 
 #[non_exhaustive]
 pub enum LintRunner {
-    Parallel(ParallelLintRunner),
+    Parallel(Box<ParallelLintRunner>),
     String(Box<StringLintRunner>),
 }
 
@@ -57,7 +57,6 @@ impl ParallelLintRunner {
     #[inline]
     // TODO: Don't use expect
     #[expect(clippy::expect_used)]
-    #[expect(clippy::unwrap_in_result)]
     pub fn run(self) -> Result<Vec<Violation>> {
         let mutex_violations: Arc<Mutex<Vec<Violation>>> = Arc::new(Mutex::new(vec![]));
         let (tx, rx) = mpsc::sync_channel::<Vec<Violation>>(self.capacity);

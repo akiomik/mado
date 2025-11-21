@@ -4,7 +4,7 @@ use comrak::nodes::{NodeValue, Sourcepos};
 use miette::Result;
 use regex::Regex;
 
-use crate::{collection::RangeSet, violation::Violation, Document};
+use crate::{Document, collection::RangeSet, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -70,20 +70,20 @@ impl RuleLike for MD013 {
 
         if !self.code_blocks || !self.tables {
             for node in doc.ast.descendants() {
-                if !self.code_blocks {
-                    if let NodeValue::CodeBlock(_code) = &node.data.borrow().value {
-                        let position = node.data.borrow().sourcepos;
-                        let range = position.start.line..=position.end.line;
-                        code_block_ranges.insert(range);
-                    }
+                if !self.code_blocks
+                    && let NodeValue::CodeBlock(_code) = &node.data.borrow().value
+                {
+                    let position = node.data.borrow().sourcepos;
+                    let range = position.start.line..=position.end.line;
+                    code_block_ranges.insert(range);
                 }
 
-                if !self.tables {
-                    if let NodeValue::Table(_table) = &node.data.borrow().value {
-                        let position = node.data.borrow().sourcepos;
-                        let range = position.start.line..=position.end.line;
-                        table_ranges.insert(range);
-                    }
+                if !self.tables
+                    && let NodeValue::Table(_table) = &node.data.borrow().value
+                {
+                    let position = node.data.borrow().sourcepos;
+                    let range = position.start.line..=position.end.line;
+                    table_ranges.insert(range);
                 }
             }
         }

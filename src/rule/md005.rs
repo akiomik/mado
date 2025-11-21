@@ -4,7 +4,7 @@ use comrak::nodes::{AstNode, NodeValue, Sourcepos};
 use miette::Result;
 use rustc_hash::FxHashMap;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 

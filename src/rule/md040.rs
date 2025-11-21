@@ -1,7 +1,7 @@
 use comrak::nodes::NodeValue;
 use miette::Result;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -35,12 +35,13 @@ impl RuleLike for MD040 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            if let NodeValue::CodeBlock(code) = &node.data.borrow().value {
-                if code.fenced && code.info.is_empty() {
-                    let position = node.data.borrow().sourcepos;
-                    let violation = self.to_violation(doc.path.clone(), position);
-                    violations.push(violation);
-                }
+            if let NodeValue::CodeBlock(code) = &node.data.borrow().value
+                && code.fenced
+                && code.info.is_empty()
+            {
+                let position = node.data.borrow().sourcepos;
+                let violation = self.to_violation(doc.path.clone(), position);
+                violations.push(violation);
             }
         }
 
@@ -52,7 +53,7 @@ impl RuleLike for MD040 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

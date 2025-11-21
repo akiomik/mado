@@ -2,9 +2,9 @@ use comrak::nodes::NodeValue;
 use miette::Result;
 use rustc_hash::FxHashMap;
 
-use crate::{violation::Violation, Document};
+use crate::{Document, violation::Violation};
 
-use super::{helper::inline_text_of, Metadata, RuleLike, Tag};
+use super::{Metadata, RuleLike, Tag, helper::inline_text_of};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -68,7 +68,7 @@ impl RuleLike for MD024 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

@@ -1,8 +1,8 @@
 use comrak::nodes::{NodeHeading, NodeValue};
 use miette::Result;
 
-use crate::violation::Violation;
 use crate::Document;
+use crate::violation::Violation;
 
 use super::{Metadata, RuleLike, Tag};
 
@@ -41,24 +41,22 @@ impl RuleLike for MD019 {
                 level,
                 ..
             }) = &node.data.borrow().value
+                && let (Some(first_node), Some(last_node)) = (node.first_child(), node.last_child())
             {
-                if let (Some(first_node), Some(last_node)) = (node.first_child(), node.last_child())
-                {
-                    let heading_position = node.data.borrow().sourcepos;
-                    let first_position = first_node.data.borrow().sourcepos;
-                    let last_position = last_node.data.borrow().sourcepos;
-                    let is_atx = heading_position.end.column == last_position.end.column;
+                let heading_position = node.data.borrow().sourcepos;
+                let first_position = first_node.data.borrow().sourcepos;
+                let last_position = last_node.data.borrow().sourcepos;
+                let is_atx = heading_position.end.column == last_position.end.column;
 
-                    let expected_offset = (*level as usize) + 1;
-                    if is_atx
-                        && ((heading_position.start.column
-                            < first_position.start.column - expected_offset)
-                            || (heading_position.end.column
-                                > last_position.end.column + expected_offset))
-                    {
-                        let violation = self.to_violation(doc.path.clone(), heading_position);
-                        violations.push(violation);
-                    }
+                let expected_offset = (*level as usize) + 1;
+                if is_atx
+                    && ((heading_position.start.column
+                        < first_position.start.column - expected_offset)
+                        || (heading_position.end.column
+                            > last_position.end.column + expected_offset))
+                {
+                    let violation = self.to_violation(doc.path.clone(), heading_position);
+                    violations.push(violation);
                 }
             }
         }
@@ -71,7 +69,7 @@ impl RuleLike for MD019 {
 mod tests {
     use std::path::Path;
 
-    use comrak::{nodes::Sourcepos, Arena};
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

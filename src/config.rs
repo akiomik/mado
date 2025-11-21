@@ -1,11 +1,11 @@
 use std::fs;
 use std::path::Path;
 
-use etcetera::choose_base_strategy;
 use etcetera::BaseStrategy as _;
-use miette::miette;
+use etcetera::choose_base_strategy;
 use miette::IntoDiagnostic as _;
 use miette::Result;
+use miette::miette;
 use serde::Deserialize;
 
 pub mod lint;
@@ -61,7 +61,7 @@ mod tests {
 
     use crate::output::Format;
     use indoc::indoc;
-    use lint::{RuleSet, MD002};
+    use lint::{MD002, RuleSet};
     use pretty_assertions::assert_eq;
 
     #[test]

@@ -7,7 +7,7 @@ use ignore::{DirEntry, Error, ParallelVisitor, ParallelVisitorBuilder, WalkState
 use miette::IntoDiagnostic as _;
 
 use super::Linter;
-use crate::{config::Config, Document, Violation};
+use crate::{Document, Violation, config::Config};
 
 pub struct MarkdownLintVisitor {
     linter: Linter,

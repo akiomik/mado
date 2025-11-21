@@ -69,7 +69,6 @@ where
     R: RangeBounds<Idx> + Eq + Hash,
 {
     #[inline]
-    #[must_use]
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
     }
