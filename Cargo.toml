@@ -39,7 +39,7 @@ toml = "0.9.7"
 mimalloc = "0.1.48"
 
 [target.'cfg(all(not(target_os = "windows"), not(target_os = "openbsd"), not(target_os = "aix"), any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "powerpc64")))'.dependencies]
-tikv-jemallocator = "0.6.0"
+tikv-jemallocator = "0.6.1"
 
 [dev-dependencies]
 assert_cmd = "2.0"
