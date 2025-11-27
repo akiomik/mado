@@ -42,7 +42,7 @@ mimalloc = "0.1.48"
 tikv-jemallocator = "0.6.1"
 
 [dev-dependencies]
-assert_cmd = "2.0"
+assert_cmd = "2.1"
 criterion = "0.7"
 indoc = "2"
 pretty_assertions = "1"
