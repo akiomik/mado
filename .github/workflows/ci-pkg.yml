@@ -39,7 +39,7 @@ jobs:
       - name: Checkout repository for updating HEAD
         uses: actions/checkout@v6
       - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@v4.0.1
+        uses: MinoruSekine/setup-scoop@v4.0.2
       - name: Install Mado via Scoop
         run: scoop install pkg\scoop\mado.json
 
@@ -52,7 +52,7 @@ jobs:
       # NOTE: Cyberboss/install-winget@1 may reach rate limit and not install winget,
       #       so use scoop instead
       - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@v4.0.1
+        uses: MinoruSekine/setup-scoop@v4.0.2
       - name: Install WinGet
         run: scoop install winget
       - name: Run winget validate
