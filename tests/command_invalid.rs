@@ -1,19 +1,17 @@
 use assert_cmd::Command;
+use assert_cmd::cargo_bin;
 use indoc::formatdoc;
-use miette::IntoDiagnostic as _;
-use miette::Result;
 
 #[test]
-fn no_command() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn no_command() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.assert();
     assert.failure();
-    Ok(())
 }
 
 #[test]
-fn unknown_command() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn unknown_command() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.args(["foobar"]).assert();
     assert.failure().stderr(formatdoc! {"
         \u{1b}[1m\u{1b}[31merror:\u{1b}[0m unrecognized subcommand \'\u{1b}[33mfoobar\u{1b}[0m\'
@@ -22,5 +20,4 @@ fn unknown_command() -> Result<()> {
 
         For more information, try \'\u{1b}[1m--help\u{1b}[0m\'.
     "});
-    Ok(())
 }

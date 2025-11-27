@@ -1,18 +1,17 @@
 use assert_cmd::Command;
+use assert_cmd::cargo_bin;
 use indoc::indoc;
-use miette::{IntoDiagnostic as _, Result};
 
 #[test]
-fn generate_shell_completion_zsh() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn generate_shell_completion_zsh() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.args(["generate-shell-completion", "zsh"]).assert();
     assert.success();
-    Ok(())
 }
 
 #[test]
-fn generate_shell_completion_invalid() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn generate_shell_completion_invalid() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.args(["generate-shell-completion", "foo"]).assert();
     assert
         .failure()
@@ -22,5 +21,4 @@ fn generate_shell_completion_invalid() -> Result<()> {
             
             For more information, try \'\u{1b}[1m--help\u{1b}[0m\'.
         "});
-    Ok(())
 }

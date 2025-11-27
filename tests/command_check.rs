@@ -3,6 +3,7 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use assert_cmd::cargo_bin;
 use indoc::formatdoc;
 use indoc::indoc;
 use mado::Config;
@@ -26,19 +27,17 @@ where
 }
 
 #[test]
-fn check() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn check() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.args(["check", "."]).assert();
     assert.success().stdout("All checks passed!\n");
-    Ok(())
 }
 
 #[test]
-fn check_quiet() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn check_quiet() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.args(["check", "--quiet", "."]).assert();
     assert.success().stdout("");
-    Ok(())
 }
 
 #[test]
@@ -51,7 +50,7 @@ fn check_quiet_with_config() -> Result<()> {
     let content = toml::to_string(&config).into_diagnostic()?;
 
     with_tmp_file("mado.toml", &content, |path| {
-        let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd.args(["--config", path_str, "check", "."]).assert();
         assert.success().stdout("");
@@ -60,8 +59,8 @@ fn check_quiet_with_config() -> Result<()> {
 }
 
 #[test]
-fn check_stdin() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn check_stdin() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.write_stdin("#Hello.").args(["check"]).assert();
     assert.failure().stdout(
         indoc! {"
@@ -72,21 +71,19 @@ fn check_stdin() -> Result<()> {
             Found 3 errors.
         "}
     );
-    Ok(())
 }
 
 #[test]
-fn check_empty_stdin() -> Result<()> {
-    let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+fn check_empty_stdin() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd.write_stdin("").args(["check"]).assert();
     assert.success().stdout("All checks passed!\n");
-    Ok(())
 }
 
 #[test]
 fn check_empty_stdin_with_file() -> Result<()> {
     with_tmp_file("test.md", "#Hello.", |path| {
-        let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd.write_stdin("").args(["check", path_str]).assert();
         assert.failure().stdout(
@@ -105,7 +102,7 @@ fn check_empty_stdin_with_file() -> Result<()> {
 #[test]
 fn check_stdin_with_file() -> Result<()> {
     with_tmp_file("test.md", "#Hello.", |path| {
-        let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd
             .write_stdin("#Hello.")
@@ -127,7 +124,7 @@ fn check_stdin_with_file() -> Result<()> {
 #[test]
 fn check_exclusion() -> Result<()> {
     with_tmp_file("test.md", "#Hello.", |path| {
-        let mut cmd = Command::cargo_bin("mado").into_diagnostic()?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd.args(["check", path_str, "--exclude", "*.md"]).assert();
         assert.success().stdout("All checks passed!\n");
