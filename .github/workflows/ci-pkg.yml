@@ -22,7 +22,7 @@ jobs:
       - name: Rename akiomik/mado to akiomik/homebrew-mado
         run: mv /opt/homebrew/Library/Taps/akiomik/mado /opt/homebrew/Library/Taps/akiomik/homebrew-mado
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Show the latest commit
         run: git log -1
       - name: Run Homebrew info
@@ -37,7 +37,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Scoop
         uses: MinoruSekine/setup-scoop@v4.0.1
       - name: Install Mado via Scoop
@@ -48,7 +48,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       # NOTE: Cyberboss/install-winget@1 may reach rate limit and not install winget,
       #       so use scoop instead
       - name: Setup Scoop
@@ -66,7 +66,7 @@ jobs:
     name: Test Nix
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: cachix/install-nix-action@v27
         - run: nix build
         - run: nix flake check
