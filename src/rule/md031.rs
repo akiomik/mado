@@ -1,4 +1,4 @@
-use comrak::nodes::{NodeCodeBlock, NodeValue};
+use comrak::nodes::NodeValue;
 use miette::Result;
 
 use crate::{Document, violation::Violation};
@@ -39,8 +39,8 @@ impl RuleLike for MD031 {
                 let prev_position = prev_node.data.borrow().sourcepos;
                 let position = node.data.borrow().sourcepos;
 
-                if let NodeValue::CodeBlock(NodeCodeBlock { fenced: true, .. }) =
-                    &prev_node.data.borrow().value
+                if let NodeValue::CodeBlock(code_block) = &prev_node.data.borrow().value
+                    && code_block.fenced
                     && position.start.line == prev_position.end.line + 1
                     && prev_position.end.column != 0
                 {
@@ -50,8 +50,8 @@ impl RuleLike for MD031 {
                     violations.push(violation);
                 }
 
-                if let NodeValue::CodeBlock(NodeCodeBlock { fenced: true, .. }) =
-                    &node.data.borrow().value
+                if let NodeValue::CodeBlock(code_block) = &node.data.borrow().value
+                    && code_block.fenced
                     && position.start.line == prev_position.end.line + 1
                     && prev_position.end.column != 0
                 {

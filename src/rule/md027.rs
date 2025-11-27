@@ -74,8 +74,13 @@ impl RuleLike for MD027 {
                     _ => {
                         // TODO: Support multi-line errors
                         let parent_position = node.data.borrow().sourcepos;
-                        let child_position = child_node.data.borrow().sourcepos;
+                        let mut child_position = child_node.data.borrow().sourcepos;
                         if child_position.start.column > parent_position.start.column + 2 {
+                            // Adjust end column for HTML blocks in blockquotes (comrak 0.46 behavior)
+                            if let NodeValue::HtmlBlock(_html) = &child_node.data.borrow().value {
+                                child_position.end.column += 2;
+                            }
+
                             let violation = self.to_violation(doc.path.clone(), child_position);
                             violations.push(violation);
                         }
@@ -168,7 +173,7 @@ mod tests {
             rule.to_violation(path, Sourcepos::from((1, 4, 5, 6))),
             // TODO: This results are expected
             // rule.to_violation(path.clone(), Sourcepos::from((1, 4, 1, 6))),
-            // rule.to_violation(path.clone(), Sourcepos::from((2, 4, 1, 6))),
+            // rule.to_violation(path.clone(), Sourcepos::from((2, 4, 2, 6))),
             // rule.to_violation(path.clone(), Sourcepos::from((4, 4, 4, 6))),
             // rule.to_violation(path, Sourcepos::from((5, 4, 5, 6))),
         ];
@@ -177,7 +182,23 @@ mod tests {
     }
 
     #[test]
-    fn check_errors_html_block() -> Result<()> {
+    fn check_errors_html_block_single_line() -> Result<()> {
+        let text = indoc! {"
+            >  <div>text</div>
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 4, 1, 18)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_html_block_multiple_lines() -> Result<()> {
         let text = indoc! {"
             >  <div>
             > <p>some text</p>
@@ -193,7 +214,7 @@ mod tests {
             rule.to_violation(path, Sourcepos::from((1, 4, 3, 10))),
             // TODO: This results are expected
             // rule.to_violation(path.clone(), Sourcepos::from((1, 4, 1, 8))),
-            // rule.to_violation(path, Sourcepos::from((3, 4, 3, 9))),
+            // rule.to_violation(path, Sourcepos::from((3, 4, 3, 10))),
         ];
         assert_eq!(actual, expected);
         Ok(())

@@ -1,3 +1,6 @@
+extern crate alloc;
+
+use alloc::borrow::Cow;
 use comrak::nodes::{AstNode, NodeValue};
 
 pub fn inline_text_of<'a>(root: &'a AstNode<'a>) -> String {
@@ -5,9 +8,10 @@ pub fn inline_text_of<'a>(root: &'a AstNode<'a>) -> String {
         .descendants()
         .filter_map(|node| match node.data.borrow().value.clone() {
             NodeValue::Text(text) => Some(text),
-            NodeValue::Code(code) => Some(format!("`{}`", code.literal)),
+            NodeValue::Code(code) => Some(format!("`{}`", code.literal).into()),
             _ => None,
         })
+        .map(Cow::into_owned)
         .collect();
 
     texts.join("")
