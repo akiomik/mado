@@ -10,7 +10,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 fn recursive<'a>(root: &'a AstNode<'a>, texts: &mut Vec<String>) {
     for node in root.children() {
         if let NodeValue::Text(text) = &node.data.borrow().value {
-            texts.push(text.clone());
+            texts.push(text.to_string());
         }
 
         recursive(node, texts);
@@ -22,7 +22,7 @@ fn descendants<'a>(root: &'a AstNode<'a>) -> Vec<String> {
 
     for node in root.descendants() {
         if let NodeValue::Text(text) = &node.data.borrow().value {
-            texts.push(text.clone());
+            texts.push(text.to_string());
         }
     }
 

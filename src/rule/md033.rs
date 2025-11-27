@@ -162,7 +162,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD033::new(&["p".to_owned()]);
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 1, 0, 0)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 1, 1, 15)))];
         assert_eq!(actual, expected);
         Ok(())
     }
