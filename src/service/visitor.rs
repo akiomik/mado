@@ -50,7 +50,7 @@ impl ParallelVisitor for MarkdownLintVisitor {
     fn visit(&mut self, either_entry: Result<DirEntry, Error>) -> WalkState {
         if let Err(err) = self.visit_inner(either_entry) {
             // TODO: Handle errors
-            println!("{err}");
+            eprintln!("{err}");
         }
         WalkState::Continue
     }
