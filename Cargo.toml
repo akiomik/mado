@@ -47,7 +47,7 @@ criterion = "0.8"
 indoc = "2"
 pretty_assertions = "1"
 rand = "0.9"
-tempfile = "3.23"
+tempfile = "3.24"
 
 [profile.release]
 lto = "thin"
