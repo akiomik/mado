@@ -44,7 +44,7 @@ jobs:
         args: "--locked --release"
         strip: true
     - name: Publish artifacts and release
-      uses: houseabsolute/actions-rust-release@v0
+      uses: houseabsolute/actions-rust-release@v1
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
