@@ -46,7 +46,7 @@ assert_cmd = "2.1"
 criterion = "0.8"
 indoc = "2"
 pretty_assertions = "1"
-rand = "0.9"
+rand = "0.10"
 tempfile = "3.24"
 
 [profile.release]
