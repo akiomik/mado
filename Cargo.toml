@@ -20,7 +20,7 @@ exclude = [
 ]
 
 [dependencies]
-clap = { version = "4.5.56", features = ["derive"] }
+clap = { version = "4.5.57", features = ["derive"] }
 clap_complete = "4.5.65"
 colored = "3.1.1"
 comrak = "0.46"
