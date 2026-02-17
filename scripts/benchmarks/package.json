@@ -3,6 +3,6 @@
   "private": true,
   "dependencies": {
     "markdownlint-cli": "^0.46.0",
-    "markdownlint-cli2": "^0.19.0"
+    "markdownlint-cli2": "^0.21.0"
   }
 }
