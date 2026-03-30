@@ -30,7 +30,7 @@ ignore = "0.4.25"
 linkify = "0.10.0"
 miette = { version = "7.6.0", features = ["fancy"] }
 regex = "1.12.2"
-rustc-hash = "2.1.1"
+rustc-hash = "2.1.2"
 scraper = "0.25.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.9.7"
