@@ -11,7 +11,7 @@ jobs:
   taplo:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: uncenter/setup-taplo@v2
         with:
           version: "0.9.3"
