@@ -1,4 +1,5 @@
 use core::result::Result;
+use std::path::{Component, PathBuf};
 use std::sync::mpsc::SyncSender;
 
 use comrak::Arena;
@@ -29,15 +30,22 @@ impl MarkdownLintVisitor {
     fn visit_inner(&self, either_entry: Result<DirEntry, Error>) -> miette::Result<()> {
         let entry = either_entry.into_diagnostic()?;
         let path = entry.path();
-        if path.is_file()
-            && path.extension() == Some("md".as_ref())
-            && !self.exclusion.is_match(path)
-        {
-            let arena = Arena::new();
-            let doc = Document::open(&arena, path)?;
-            let violations = self.linter.check(&doc)?;
-            if !violations.is_empty() {
-                self.tx.send(violations).into_diagnostic()?;
+        if path.is_file() && path.extension() == Some("md".as_ref()) {
+            // Strip a leading "./" so that exclude patterns match regardless of
+            // whether the walked path carries one (depends on how the target
+            // argument was spelled on the command line, see issue #168).
+            let normalized_path: PathBuf = path
+                .components()
+                .skip_while(|component| matches!(component, Component::CurDir))
+                .collect();
+
+            if !self.exclusion.is_match(&normalized_path) {
+                let arena = Arena::new();
+                let doc = Document::open(&arena, path)?;
+                let violations = self.linter.check(&doc)?;
+                if !violations.is_empty() {
+                    self.tx.send(violations).into_diagnostic()?;
+                }
             }
         }
 

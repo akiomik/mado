@@ -131,3 +131,31 @@ fn check_exclusion() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn check_exclusion_default_target_without_dot_slash_prefix() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let dir = path.parent().wrap_err("failed to get parent dir")?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(dir)
+            .args(["check", "--exclude", "test.md"])
+            .assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let dir = path.parent().wrap_err("failed to get parent dir")?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(dir)
+            .args(["check", "--exclude", "./test.md"])
+            .assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}

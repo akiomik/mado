@@ -68,7 +68,10 @@ impl Lint {
     pub fn exclude_set(&self) -> Result<GlobSet> {
         let mut builder = GlobSetBuilder::new();
         for glob in &self.exclude {
-            builder.add(glob.clone());
+            // Strip a leading "./" so that e.g. "file.md" and "./file.md" are
+            // treated as the same pattern (see issue #168).
+            let pattern = glob.glob().trim_start_matches("./");
+            builder.add(Glob::new(pattern).into_diagnostic()?);
         }
         builder.build().into_diagnostic()
     }
@@ -392,6 +395,21 @@ mod tests {
         let set = config.exclude_set()?;
 
         assert_eq!(set.matches("foo/bar/test.md"), vec![0, 2]);
+        Ok(())
+    }
+
+    #[test]
+    fn exclude_set_strips_leading_current_dir() -> Result<()> {
+        let config = Lint {
+            exclude: vec![Glob::new("./test.md").into_diagnostic()?],
+            ..Lint::default()
+        };
+
+        let set = config.exclude_set()?;
+
+        // The "./" prefix is stripped when building the set, so it matches
+        // the same (already-normalized) candidates as "test.md" would.
+        assert_eq!(set.matches("test.md"), vec![0]);
         Ok(())
     }
 
