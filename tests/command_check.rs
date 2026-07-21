@@ -81,6 +81,7 @@ fn check_stdin() {
 fn check_stdin_no_color() {
     let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd
+        .env_remove("CLICOLOR_FORCE")
         .env("NO_COLOR", "1")
         .write_stdin("#Hello.")
         .args(["check"])
@@ -130,6 +131,7 @@ fn check_empty_stdin_with_file_no_color() -> Result<()> {
         let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd
+            .env_remove("CLICOLOR_FORCE")
             .env("NO_COLOR", "1")
             .write_stdin("")
             .args(["check", path_str])
@@ -174,6 +176,7 @@ fn check_stdin_with_file_no_color() -> Result<()> {
         let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd
+            .env_remove("CLICOLOR_FORCE")
             .env("NO_COLOR", "1")
             .write_stdin("#Hello.")
             .args(["check", path_str])

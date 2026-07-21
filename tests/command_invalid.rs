@@ -25,7 +25,11 @@ fn unknown_command() {
 #[test]
 fn unknown_command_no_color() {
     let mut cmd = Command::new(cargo_bin!("mado"));
-    let assert = cmd.env("NO_COLOR", "1").args(["foobar"]).assert();
+    let assert = cmd
+        .env_remove("CLICOLOR_FORCE")
+        .env("NO_COLOR", "1")
+        .args(["foobar"])
+        .assert();
     assert.failure().stderr(formatdoc! {"
         error: unrecognized subcommand 'foobar'
 

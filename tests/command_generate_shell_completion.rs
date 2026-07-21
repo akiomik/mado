@@ -30,6 +30,7 @@ fn generate_shell_completion_invalid() {
 fn generate_shell_completion_invalid_no_color() {
     let mut cmd = Command::new(cargo_bin!("mado"));
     let assert = cmd
+        .env_remove("CLICOLOR_FORCE")
         .env("NO_COLOR", "1")
         .args(["generate-shell-completion", "foo"])
         .assert();
