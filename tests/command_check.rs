@@ -61,7 +61,11 @@ fn check_quiet_with_config() -> Result<()> {
 #[test]
 fn check_stdin() {
     let mut cmd = Command::new(cargo_bin!("mado"));
-    let assert = cmd.write_stdin("#Hello.").args(["check"]).assert();
+    let assert = cmd
+        .env("CLICOLOR_FORCE", "1")
+        .write_stdin("#Hello.")
+        .args(["check"])
+        .assert();
     assert.failure().stdout(
         indoc! {"
             \u{1b}[1m(stdin)\u{1b}[0m\u{1b}[34m:\u{1b}[0m1\u{1b}[34m:\u{1b}[0m1\u{1b}[34m:\u{1b}[0m \u{1b}[1;31mMD018\u{1b}[0m No space after hash on atx style header
@@ -71,6 +75,24 @@ fn check_stdin() {
             Found 3 errors.
         "}
     );
+}
+
+#[test]
+fn check_stdin_no_color() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
+    let assert = cmd
+        .env_remove("CLICOLOR_FORCE")
+        .env("NO_COLOR", "1")
+        .write_stdin("#Hello.")
+        .args(["check"])
+        .assert();
+    assert.failure().stdout(indoc! {"
+        (stdin):1:1: MD018 No space after hash on atx style header
+        (stdin):1:1: MD041 First line in file should be a top level header
+        (stdin):1:1: MD047 File should end with a single newline character
+
+        Found 3 errors.
+    "});
 }
 
 #[test]
@@ -85,7 +107,11 @@ fn check_empty_stdin_with_file() -> Result<()> {
     with_tmp_file("test.md", "#Hello.", |path| {
         let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
-        let assert = cmd.write_stdin("").args(["check", path_str]).assert();
+        let assert = cmd
+            .env("CLICOLOR_FORCE", "1")
+            .write_stdin("")
+            .args(["check", path_str])
+            .assert();
         assert.failure().stdout(
             formatdoc! {"
                 \u{1b}[1m{path_str}\u{1b}[0m\u{1b}[34m:\u{1b}[0m1\u{1b}[34m:\u{1b}[0m1\u{1b}[34m:\u{1b}[0m \u{1b}[1;31mMD018\u{1b}[0m No space after hash on atx style header
@@ -100,11 +126,34 @@ fn check_empty_stdin_with_file() -> Result<()> {
 }
 
 #[test]
+fn check_empty_stdin_with_file_no_color() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let path_str = path.to_str().wrap_err("failed to convert string")?;
+        let assert = cmd
+            .env_remove("CLICOLOR_FORCE")
+            .env("NO_COLOR", "1")
+            .write_stdin("")
+            .args(["check", path_str])
+            .assert();
+        assert.failure().stdout(formatdoc! {"
+            {path_str}:1:1: MD018 No space after hash on atx style header
+            {path_str}:1:1: MD041 First line in file should be a top level header
+            {path_str}:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
+}
+
+#[test]
 fn check_stdin_with_file() -> Result<()> {
     with_tmp_file("test.md", "#Hello.", |path| {
         let mut cmd = Command::new(cargo_bin!("mado"));
         let path_str = path.to_str().wrap_err("failed to convert string")?;
         let assert = cmd
+            .env("CLICOLOR_FORCE", "1")
             .write_stdin("#Hello.")
             .args(["check", path_str])
             .assert();
@@ -117,6 +166,28 @@ fn check_stdin_with_file() -> Result<()> {
                 Found 3 errors.
             "}
         );
+        Ok(())
+    })
+}
+
+#[test]
+fn check_stdin_with_file_no_color() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let path_str = path.to_str().wrap_err("failed to convert string")?;
+        let assert = cmd
+            .env_remove("CLICOLOR_FORCE")
+            .env("NO_COLOR", "1")
+            .write_stdin("#Hello.")
+            .args(["check", path_str])
+            .assert();
+        assert.failure().stdout(indoc! {"
+            (stdin):1:1: MD018 No space after hash on atx style header
+            (stdin):1:1: MD041 First line in file should be a top level header
+            (stdin):1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
         Ok(())
     })
 }
