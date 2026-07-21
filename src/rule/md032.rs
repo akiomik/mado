@@ -145,7 +145,7 @@ mod tests {
         let rule = MD032::new();
         let actual = rule.check(&doc)?;
         let expected = vec![
-            rule.to_violation(path.clone(), Sourcepos::from((2, 1, 3, 0))),
+            rule.to_violation(path.clone(), Sourcepos::from((2, 1, 2, 6))),
             rule.to_violation(path.clone(), Sourcepos::from((5, 1, 6, 0))),
             rule.to_violation(path, Sourcepos::from((8, 1, 9, 0))),
         ];
@@ -240,7 +240,7 @@ mod tests {
         let actual = rule.check(&doc)?;
         let expected = vec![
             // TODO: deduplicate
-            rule.to_violation(path.clone(), Sourcepos::from((4, 1, 5, 0))),
+            rule.to_violation(path.clone(), Sourcepos::from((4, 1, 4, 6))),
             rule.to_violation(path.clone(), Sourcepos::from((9, 1, 9, 6))),
             rule.to_violation(path.clone(), Sourcepos::from((9, 1, 9, 6))),
             rule.to_violation(path, Sourcepos::from((14, 1, 14, 6))),

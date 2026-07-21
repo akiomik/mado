@@ -17,7 +17,7 @@ pub struct Document<'a> {
 
 impl<'a> Document<'a> {
     #[inline]
-    pub fn new(arena: &'a Arena<AstNode<'a>>, path: PathBuf, text: String) -> Result<Self> {
+    pub fn new(arena: &'a Arena<'a>, path: PathBuf, text: String) -> Result<Self> {
         let mut options = Options::default();
         options.extension.front_matter_delimiter = Some("---".to_owned());
         options.extension.table = true;
@@ -33,7 +33,7 @@ impl<'a> Document<'a> {
     }
 
     #[inline]
-    pub fn open(arena: &'a Arena<AstNode<'a>>, path: &Path) -> Result<Self> {
+    pub fn open(arena: &'a Arena<'a>, path: &Path) -> Result<Self> {
         let text = fs::read_to_string(path).into_diagnostic()?;
         Self::new(arena, path.to_path_buf(), text)
     }
