@@ -74,13 +74,8 @@ impl RuleLike for MD027 {
                     _ => {
                         // TODO: Support multi-line errors
                         let parent_position = node.data.borrow().sourcepos;
-                        let mut child_position = child_node.data.borrow().sourcepos;
+                        let child_position = child_node.data.borrow().sourcepos;
                         if child_position.start.column > parent_position.start.column + 2 {
-                            // Adjust end column for HTML blocks in blockquotes (comrak 0.46 behavior)
-                            if let NodeValue::HtmlBlock(_html) = &child_node.data.borrow().value {
-                                child_position.end.column += 2;
-                            }
-
                             let violation = self.to_violation(doc.path.clone(), child_position);
                             violations.push(violation);
                         }

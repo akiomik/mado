@@ -161,7 +161,7 @@ mod tests {
         let rule = MD030::default();
         let actual = rule.check(&doc)?;
         let expected = vec![
-            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 4, 0))),
+            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 3, 20))),
             rule.to_violation(path, Sourcepos::from((5, 1, 5, 7))),
         ];
         assert_eq!(actual, expected);
@@ -241,7 +241,7 @@ mod tests {
         let rule = MD030::default();
         let actual = rule.check(&doc)?;
         let expected = vec![
-            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 4, 0))),
+            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 3, 21))),
             rule.to_violation(path, Sourcepos::from((5, 1, 5, 8))),
         ];
         assert_eq!(actual, expected);
