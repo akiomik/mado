@@ -9,14 +9,13 @@ authors = ["Akiomi Kamakura <akiomik@gmail.com>"]
 keywords = ["markdown", "lint"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
-exclude = [
-  "/action",
-  "/scripts",
-  "/tmp",
-  ".node-version",
-  ".ruby-version",
-  "action.yml",
-  "flamegraph.svg",
+include = [
+  "/src",
+  "/benches",
+  "/tests",
+  "/LICENSE",
+  "/README.md",
+  "/CHANGELOG.md",
 ]
 
 [dependencies]
