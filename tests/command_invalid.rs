@@ -12,12 +12,25 @@ fn no_command() {
 #[test]
 fn unknown_command() {
     let mut cmd = Command::new(cargo_bin!("mado"));
-    let assert = cmd.args(["foobar"]).assert();
+    let assert = cmd.env("CLICOLOR_FORCE", "1").args(["foobar"]).assert();
     assert.failure().stderr(formatdoc! {"
         \u{1b}[1m\u{1b}[31merror:\u{1b}[0m unrecognized subcommand \'\u{1b}[33mfoobar\u{1b}[0m\'
 
         \u{1b}[1m\u{1b}[4mUsage:\u{1b}[0m \u{1b}[1mmado\u{1b}[0m [OPTIONS] <COMMAND>
 
         For more information, try \'\u{1b}[1m--help\u{1b}[0m\'.
+    "});
+}
+
+#[test]
+fn unknown_command_no_color() {
+    let mut cmd = Command::new(cargo_bin!("mado"));
+    let assert = cmd.env("NO_COLOR", "1").args(["foobar"]).assert();
+    assert.failure().stderr(formatdoc! {"
+        error: unrecognized subcommand 'foobar'
+
+        Usage: mado [OPTIONS] <COMMAND>
+
+        For more information, try '--help'.
     "});
 }

@@ -61,8 +61,10 @@ impl Ord for Markdownlint<'_> {
 mod tests {
     use std::path::Path;
 
+    use colored::control;
     use comrak::nodes::Sourcepos;
     use pretty_assertions::assert_eq;
+    use serial_test::serial;
 
     use crate::rule::{Metadata, Tag};
 
@@ -76,12 +78,28 @@ mod tests {
     };
 
     #[test]
-    fn display_fmt() {
+    #[serial(colored)]
+    fn display_fmt_colorized() {
+        control::set_override(true);
         let path = Path::new("file.md").to_path_buf();
         let position = Sourcepos::from((0, 1, 3, 5));
         let violation = Violation::new(path, &METADATA, position);
         let actual = Markdownlint::new(&violation).to_string();
         let expected = "\u{1b}[31mfile.md:0:1 name/alias description\u{1b}[0m";
         assert_eq!(actual, expected);
+        control::unset_override();
+    }
+
+    #[test]
+    #[serial(colored)]
+    fn display_fmt_plain() {
+        control::set_override(false);
+        let path = Path::new("file.md").to_path_buf();
+        let position = Sourcepos::from((0, 1, 3, 5));
+        let violation = Violation::new(path, &METADATA, position);
+        let actual = Markdownlint::new(&violation).to_string();
+        let expected = "file.md:0:1 name/alias description";
+        assert_eq!(actual, expected);
+        control::unset_override();
     }
 }
