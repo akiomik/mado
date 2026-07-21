@@ -131,3 +131,59 @@ fn check_exclusion() -> Result<()> {
         Ok(())
     })
 }
+
+// The next three tests each pin down a different half of the fix for #168.
+// `--exclude` patterns and walked file paths are only guaranteed to match
+// when both `Lint::exclude_set` (src/config/lint.rs) and
+// `MarkdownLintVisitor::visit_inner` (src/service/visitor.rs) strip a
+// leading "./" the same way. Dropping the normalization on just one side
+// makes at least one of these fail:
+//   - default target (walked path carries "./") + pattern without "./"
+//     needs visit_inner to normalize the walked path.
+//   - explicit target (walked path has no "./") + pattern with "./"
+//     needs exclude_set to normalize the pattern.
+//   - default target + pattern with "./"
+//     needs both sides to agree, since walked path and pattern both carry
+//     "./" and must be stripped the same way to still match afterwards.
+
+#[test]
+fn check_exclusion_default_target_without_dot_slash_prefix() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let dir = path.parent().wrap_err("failed to get parent dir")?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(dir)
+            .args(["check", "--exclude", "test.md"])
+            .assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_exclusion_explicit_target_with_dot_slash_prefix() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let dir = path.parent().wrap_err("failed to get parent dir")?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(dir)
+            .args(["check", "test.md", "--exclude", "./test.md"])
+            .assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
+    with_tmp_file("test.md", "#Hello.", |path| {
+        let dir = path.parent().wrap_err("failed to get parent dir")?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(dir)
+            .args(["check", "--exclude", "./test.md"])
+            .assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
