@@ -69,7 +69,10 @@ impl Lint {
         let mut builder = GlobSetBuilder::new();
         for glob in &self.exclude {
             // Strip a leading "./" so that e.g. "file.md" and "./file.md" are
-            // treated as the same pattern (see issue #168).
+            // treated as the same pattern (see issue #168). Keep this in sync
+            // with the walked-path normalization in
+            // MarkdownLintVisitor::visit_inner (src/service/visitor.rs) or the
+            // two sides stop agreeing on what a match is.
             let pattern = glob.glob().trim_start_matches("./");
             builder.add(Glob::new(pattern).into_diagnostic()?);
         }

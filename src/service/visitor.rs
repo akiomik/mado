@@ -33,7 +33,10 @@ impl MarkdownLintVisitor {
         if path.is_file() && path.extension() == Some("md".as_ref()) {
             // Strip a leading "./" so that exclude patterns match regardless of
             // whether the walked path carries one (depends on how the target
-            // argument was spelled on the command line, see issue #168).
+            // argument was spelled on the command line, see issue #168). Keep
+            // this in sync with the pattern normalization in
+            // Lint::exclude_set (src/config/lint.rs) or the two sides stop
+            // agreeing on what a match is.
             let normalized_path: PathBuf = path
                 .components()
                 .skip_while(|component| matches!(component, Component::CurDir))
