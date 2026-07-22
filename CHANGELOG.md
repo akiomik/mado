@@ -12,6 +12,7 @@
 * fix: add missing header to winget schema by @akiomik in #242
 * fix: normalize leading "./" before matching --exclude patterns by @akiomik in
   #344
+* fix: pin cross-compile toolchain to 1.91.1 in CD by @akiomik in #349
 
 ### Other Changes
 
