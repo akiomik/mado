@@ -1,5 +1,103 @@
 # Changelog
 
+## 0.3.1 (2026-07-22)
+
+### Features
+
+* use eprintln instead of println for errors by @mattn in #247
+
+### Bug Fixes
+
+* build(deps): bump comrak from 0.46.0 to 0.54.0 by @dependabot in #337
+* fix: add missing header to winget schema by @akiomik in #242
+* fix: normalize leading "./" before matching --exclude patterns by @akiomik in
+  #344
+
+### Other Changes
+
+* chore: bump packages to v0.3.0 by @akiomik in #151
+* build(deps): bump mimalloc from 0.1.45 to 0.1.52 by @dependabot in #153, #175,
+  #209, #336
+* build(deps): bump clap from 4.5.35 to 4.6.3 by @dependabot in #152, #156,
+  #164, #176, #194, #202, #227, #255, #265, #275, #287, #323, #340
+* build(deps): bump assert_cmd from 2.0.16 to 2.2.2 by @dependabot in #155,
+  #239, #259, #289, #303, #315
+* build(deps): bump rand from 0.9.0 to 0.10.2 by @dependabot in #154, #185,
+  #301, #320, #333
+* build(deps): bump toml from 0.8.20 to 0.9.7 by @dependabot in #158, #160,
+  #172, #181, #191, #210
+* build(deps): bump miette from 7.5.0 to 7.6.0 by @dependabot in #157
+* build(deps): bump clap_complete from 4.5.47 to 4.6.7 by @dependabot in #165,
+  #177, #183, #193, #222, #238, #252, #254, #260, #278, #305, #327, #329
+* build(deps): bump tempfile from 3.19.1 to 3.27.0 by @dependabot in #163, #199,
+  #212, #253, #276, #286
+* build(deps): bump comrak from 0.38.0 to 0.41.0 by @dependabot in #161, #184,
+  #192
+* Add support for use as pre-commit hook by @proinsias in #162
+* build(deps): bump brace-expansion from 2.0.1 to 2.0.2 in /scripts/benchmarks
+  by @dependabot in #173
+* build(deps): bump criterion from 0.5.1 to 0.8.2 by @dependabot in #167, #189,
+  #245, #248, #270
+* docs(readme): add install guide for archlinux by @harilvfs in #186
+* build(deps): bump regex from 1.11.1 to 1.13.0 by @dependabot in #198, #218,
+  #324, #335
+* build(deps): bump scraper from 0.23.1 to 0.27.0 by @dependabot in #197, #249,
+  #317
+* build(deps): bump serde from 1.0.219 to 1.0.229 by @dependabot in #211, #230,
+  #339
+* build(deps): bump js-yaml and markdownlint-cli2 in /scripts/benchmarks by
+  @dependabot in #224
+* build(deps): bump glob and markdownlint-cli in /scripts/benchmarks by
+  @dependabot in #225
+* build: use rust 1.91 by @akiomik in #226
+* build(deps): bump globset from 0.4.16 to 0.4.18 by @dependabot in #221
+* build(deps): bump tikv-jemallocator from 0.6.0 to 0.7.0 by @dependabot in
+  #231, #316
+* build(deps): bump ignore from 0.4.23 to 0.4.28 by @dependabot in #229, #326,
+  #332, #338
+* ci: add github-actions to dependabot by @akiomik in #232
+* build(deps): bump etcetera from 0.10.0 to 0.11.0 by @dependabot in #241
+* ci: disable fail_ci_if_error on codecov by @akiomik in #243
+* build(deps): bump actions/checkout from 4 to 7 by @dependabot in #233, #322
+* build(deps): bump cachix/install-nix-action from 27 to 31 by @dependabot in
+  #235
+* build(deps): bump crate-ci/typos from 1.28.4 to 1.48.0 by @dependabot in #234,
+  #257, #261, #263, #266, #279, #300, #307, #314, #330
+* build(deps): bump houseabsolute/actions-rust-cross from 0 to 1 by @dependabot
+  in #236
+* build(deps): bump MinoruSekine/setup-scoop from 4.0.1 to 5.0.0 by @dependabot
+  in #237, #325
+* build(deps): bump indoc from 2.0.6 to 2.0.7 by @dependabot in #240
+* build: bump comrak to 0.46 by @akiomik in #244
+* build(deps): bump colored from 3.0.0 to 3.1.1 by @dependabot in #262
+* build(deps): bump @isaacs/brace-expansion from 5.0.0 to 5.0.1 in
+  /scripts/benchmarks by @dependabot in #267
+* build(deps): bump time from 0.3.44 to 0.3.47 by @dependabot in #269
+* build(deps): bump time from 0.3.37 to 0.3.47 in /fuzz by @dependabot in #268
+* build(deps): bump markdown-it and markdownlint-cli2 in /scripts/benchmarks by
+  @dependabot in #280
+* build(deps): bump uncenter/setup-taplo from 1 to 2 by @dependabot in #302
+* build(deps): bump codecov/codecov-action from 5 to 7 by @dependabot in #298,
+  #313
+* build(deps): bump rustc-hash from 2.1.1 to 2.1.3 by @dependabot in #296, #341
+* build(deps): bump picomatch from 2.3.1 to 2.3.2 in /scripts/benchmarks by
+  @dependabot in #295
+* build(deps): bump smol-toml and markdownlint-cli in /scripts/benchmarks by
+  @dependabot in #294
+* build(deps): bump brace-expansion from 5.0.5 to 5.0.6 in /scripts/benchmarks
+  by @dependabot in #319
+* build(deps): bump linkify from 0.10.0 to 0.11.0 by @dependabot in #321
+* build(deps): bump linkify-it from 5.0.0 to 5.0.1 in /scripts/benchmarks by
+  @dependabot in #328
+* build(deps): bump js-yaml, markdownlint-cli and markdownlint-cli2 in
+  /scripts/benchmarks by @dependabot in #334, #343
+* build(deps): bump toml from 0.9.8 to 1.1.3+spec-1.1.0 by @dependabot in #342
+* build(deps): bump houseabsolute/actions-rust-release from 0 to 1 by
+  @dependabot in #256
+* test: make color-dependent output assertions deterministic by @akiomik in #345
+* build: switch Cargo.toml packaging from exclude to include allowlist by
+  @akiomik in #347
+
 ## 0.3.0 (2025-04-12)
 
 ### ⚠️ BREAKING CHANGES
