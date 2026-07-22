@@ -41,6 +41,7 @@ jobs:
       with:
         command: build
         target: ${{ matrix.platform.target }}
+        toolchain: "1.91.1"
         args: "--locked --release"
         strip: true
     - name: Publish artifacts and release
