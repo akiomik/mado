@@ -40,6 +40,16 @@ impl MD030 {
         }
     }
 
+    /// Width of an ordered list marker, e.g. 2 for `9.` and 3 for `10.`.
+    ///
+    /// `NodeList::padding` counts the marker itself, so the marker width has to be
+    /// subtracted before the remainder can be compared against `ol_single`/`ol_multi`.
+    /// Assuming a fixed width makes every item from 10 onwards look over-indented.
+    fn ordered_marker_width(start: usize) -> usize {
+        let digits = start.checked_ilog10().unwrap_or(0) as usize + 1;
+        digits + 1 // `.` or `)`
+    }
+
     fn check_recursive<'a>(
         &self,
         root: &'a AstNode<'a>,
@@ -67,9 +77,15 @@ impl MD030 {
 
                         let is_violated = match (is_multi, list.list_type) {
                             (true, ListType::Bullet) => item.padding > self.ul_multi + 1,
-                            (true, ListType::Ordered) => item.padding > self.ol_multi + 2,
+                            (true, ListType::Ordered) => {
+                                item.padding
+                                    > self.ol_multi + Self::ordered_marker_width(item.start)
+                            }
                             (false, ListType::Bullet) => item.padding > self.ul_single + 1,
-                            (false, ListType::Ordered) => item.padding > self.ol_single + 2,
+                            (false, ListType::Ordered) => {
+                                item.padding
+                                    > self.ol_single + Self::ordered_marker_width(item.start)
+                            }
                         };
 
                         if is_violated {
@@ -285,6 +301,28 @@ mod tests {
     }
 
     #[test]
+    fn check_errors_ol_multi_digit_marker() -> Result<()> {
+        let text = indoc! {"
+            9.   Foo
+            10.   Bar
+            100.   Baz
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD030::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 1, 8))),
+            rule.to_violation(path.clone(), Sourcepos::from((2, 1, 2, 9))),
+            rule.to_violation(path, Sourcepos::from((3, 1, 3, 10))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
     fn check_errors_nested() -> Result<()> {
         let text = indoc! {"
             * Parent list
@@ -321,6 +359,32 @@ mod tests {
                * Bar
                * Baz
             1. Qux
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD030::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_ol_multi_digit_marker() -> Result<()> {
+        let text = indoc! {"
+            8. Foo
+            9. Bar
+            10. Baz
+            11. Qux
+
+            99. Foo
+            100. Bar
+
+            10. Foo
+                Second paragraph
+            11. Bar
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
