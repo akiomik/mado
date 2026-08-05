@@ -27,6 +27,20 @@ impl MD007 {
         Self { indent }
     }
 
+    /// Indentation of a list item relative to the blockquote that contains it, i.e.
+    /// 0 for the `*` in `> * Foo` and 2 for the one in `>   * Foo`.
+    ///
+    /// `sourcepos` columns are absolute, so they count the `> ` prefix as
+    /// indentation. Measuring from the last `>` on the line instead is what keeps a
+    /// correctly indented quoted list from being reported. One space or tab after
+    /// the marker belongs to the prefix rather than to the indentation, per
+    /// `CommonMark`, so it is dropped.
+    ///
+    /// `None` means the line could not be read back, and the caller then skips the
+    /// item: a position we cannot measure is not evidence of a violation. No input
+    /// is known to produce it, since a list item inside a blockquote always carries
+    /// a `>` on its own start line, but the lookup stays checked rather than
+    /// relying on that.
     fn blockquote_indent(lines: &[String], position: Sourcepos) -> Option<usize> {
         let indent = position.start.column.checked_sub(1)?;
         let line = lines.get(position.start.line.checked_sub(1)?)?;
@@ -76,6 +90,9 @@ impl RuleLike for MD007 {
                     maybe_ancestor = ancestor.parent();
                 }
 
+                // An item whose indentation cannot be measured is skipped entirely,
+                // leaving `maybe_prev_indent` untouched so the next item is compared
+                // against the last position we could actually read.
                 let Some(indent) = maybe_indent else {
                     continue;
                 };
@@ -276,5 +293,49 @@ mod tests {
         let expected = vec![rule.to_violation(path, Sourcepos::from((2, 6, 2, 39)))];
         assert_eq!(actual, expected);
         Ok(())
+    }
+
+    // `blockquote_indent` returns `None` only for positions that `check` cannot
+    // produce, so those arms are exercised directly.
+    #[test]
+    fn blockquote_indent_measures_from_the_last_marker() {
+        let lines = vec![">   * Foo".to_owned()];
+        let position = Sourcepos::from((1, 5, 1, 9));
+        assert_eq!(MD007::blockquote_indent(&lines, position), Some(2));
+    }
+
+    #[test]
+    fn blockquote_indent_drops_one_tab_after_the_marker() {
+        let lines = vec![">\t* Foo".to_owned()];
+        let position = Sourcepos::from((1, 3, 1, 7));
+        assert_eq!(MD007::blockquote_indent(&lines, position), Some(0));
+    }
+
+    #[test]
+    fn blockquote_indent_without_marker() {
+        let lines = vec!["  * Foo".to_owned()];
+        let position = Sourcepos::from((1, 3, 1, 7));
+        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    }
+
+    #[test]
+    fn blockquote_indent_beyond_last_line() {
+        let lines = vec!["> * Foo".to_owned()];
+        let position = Sourcepos::from((2, 3, 2, 7));
+        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    }
+
+    #[test]
+    fn blockquote_indent_beyond_end_of_line() {
+        let lines = vec!["> ".to_owned()];
+        let position = Sourcepos::from((1, 9, 1, 9));
+        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    }
+
+    #[test]
+    fn blockquote_indent_inside_a_multibyte_character() {
+        let lines = vec!["\u{3042}> * Foo".to_owned()];
+        let position = Sourcepos::from((1, 3, 1, 7));
+        assert_eq!(MD007::blockquote_indent(&lines, position), None);
     }
 }
