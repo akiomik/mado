@@ -48,12 +48,10 @@ impl MD004 {
         root: &'a AstNode<'a>,
         path: &PathBuf,
         violations: &mut Vec<Violation>,
-        initial_maybe_list_char: Option<char>,
+        maybe_list_char: &mut Option<char>,
         levels: &mut FxHashMap<usize, char>,
         level: usize,
     ) {
-        let mut maybe_list_char = initial_maybe_list_char;
-
         for node in root.children() {
             if let NodeValue::List(_) = node.data.borrow().value {
                 for item_node in node.children() {
@@ -81,7 +79,7 @@ impl MD004 {
                         }
 
                         if maybe_list_char.is_none() {
-                            maybe_list_char = Some(bullet_char as char);
+                            *maybe_list_char = Some(bullet_char as char);
                         }
 
                         if self.style == ListStyle::Sublist {
@@ -98,6 +96,13 @@ impl MD004 {
                         level + 1,
                     );
                 }
+            } else {
+                // A blockquote (or any other non-item container) can hold a list
+                // too. The level is left untouched: a list at the top of a
+                // blockquote is a level-1 list, which is what `sublist` compares
+                // against, and `consistent` is document-wide, so the style picked
+                // up inside the container carries back out.
+                self.check_recursive(node, path, violations, maybe_list_char, levels, level);
             }
         }
     }
@@ -121,9 +126,17 @@ impl RuleLike for MD004 {
     #[inline]
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
+        let mut maybe_list_char = None;
         let mut levels = FxHashMap::default();
 
-        self.check_recursive(doc.ast, &doc.path, &mut violations, None, &mut levels, 1);
+        self.check_recursive(
+            doc.ast,
+            &doc.path,
+            &mut violations,
+            &mut maybe_list_char,
+            &mut levels,
+            1,
+        );
 
         Ok(violations)
     }
@@ -248,6 +261,88 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((10, 1, 10, 8))),
             rule.to_violation(path, Sourcepos::from((11, 1, 11, 8))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * Item 1
+            > + Item 2
+            > - Item 3
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD004::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 3, 2, 10))),
+            rule.to_violation(path, Sourcepos::from((3, 3, 3, 10))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // `consistent` is document-wide, so the style set by the first list carries
+    // across the blockquote boundary in both directions.
+    #[test]
+    fn check_errors_for_consistent_with_style_set_inside_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * Item 1
+
+            + Item 2
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD004::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 1, 3, 8)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A list at the top of a blockquote is a level 1 list, so `sublist` compares it
+    // against the top-level style rather than treating the blockquote as a level.
+    #[test]
+    fn check_errors_for_sublist_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            * Item 1
+              + Item 1a
+
+            > + Item 2
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD004::new(ListStyle::Sublist);
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((4, 3, 4, 10)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_for_sublist_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            * Item 1
+              + Item 1a
+
+            > * Item 2
+            >   + Item 2a
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD004::new(ListStyle::Sublist);
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }

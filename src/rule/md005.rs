@@ -54,6 +54,20 @@ impl MD005 {
                         self.check_recursive(item_node, path, violations, levels, level + 1);
                     }
                 }
+            } else {
+                // Lists inside a blockquote (or any other non-item container) are
+                // checked too, but against their own baseline: `levels` records
+                // absolute columns, and every line inside a blockquote is shifted
+                // by the `> ` prefix. Sharing the outer map would make a correctly
+                // indented quoted list look inconsistent with an unquoted one.
+                //
+                // NOTE: markdownlint reports nothing inside a blockquote here. It
+                // measures indentation from the raw line, so `>   * Foo` counts as
+                // indent 0 and every quoted item looks equally indented. That is a
+                // side effect of how it measures rather than a decision about what
+                // MD005 means, so the deviation is deliberate on our side.
+                let mut scoped_levels = FxHashMap::default();
+                self.check_recursive(node, path, violations, &mut scoped_levels, level);
             }
         }
     }
@@ -174,6 +188,46 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((7, 4, 7, 11))),
             rule.to_violation(path, Sourcepos::from((8, 4, 8, 11))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: markdownlint reports nothing here, see the comment in `check_recursive`.
+    #[test]
+    fn check_errors_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * Item 1
+            >  * Item 2
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 11)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A blockquote shifts every line by its prefix, so quoted items must not be
+    // compared against unquoted ones at the same nesting depth.
+    #[test]
+    fn check_no_errors_for_blockquote_alongside_top_level_list() -> Result<()> {
+        let text = indoc! {"
+            * Item 1
+            * Item 2
+
+            > * Item 3
+            > * Item 4
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }
