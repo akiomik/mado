@@ -69,6 +69,11 @@ impl MD029 {
                         self.check_recursive(item_node, path, violations);
                     }
                 }
+            } else {
+                // Lists can also be reached through containers that are not list
+                // items, a blockquote being the common case. Descending into them
+                // keeps the rule from going silent on `> 1. Foo`.
+                self.check_recursive(node, path, violations);
             }
         }
     }
@@ -174,6 +179,44 @@ mod tests {
     }
 
     #[test]
+    fn check_errors_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > 1. Do this.
+            > 2. Do that.
+            > 3. Done.
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD029::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 3, 2, 13))),
+            rule.to_violation(path, Sourcepos::from((3, 3, 3, 10))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_in_nested_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > > 1. Do this.
+            > > 2. Do that.
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD029::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 5, 2, 15)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
     fn check_no_errors_one() -> Result<()> {
         let text = indoc! {"
             1. Do this.
@@ -203,6 +246,24 @@ mod tests {
         let arena = Arena::new();
         let doc = Document::new(&arena, path, text)?;
         let rule = MD029::new(OrderedListStyle::Ordered);
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > 1. Do this.
+            > 1. Do that.
+            > 1. Done.
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD029::default();
         let actual = rule.check(&doc)?;
         let expected = vec![];
         assert_eq!(actual, expected);

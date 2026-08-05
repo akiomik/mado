@@ -118,6 +118,12 @@ impl MD030 {
                         self.check_recursive(item_node, path, lines, violations);
                     }
                 }
+            } else {
+                // See the comment on the equivalent branch in MD029: lists reached
+                // through a blockquote or other non-item container must still be
+                // checked. `ordered_marker_width` needs no adjustment for them,
+                // because `sourcepos` columns already account for the `> ` prefix.
+                self.check_recursive(node, path, lines, violations);
             }
         }
     }
@@ -383,6 +389,67 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((2, 5, 3, 24))),
             rule.to_violation(path, Sourcepos::from((4, 5, 4, 11))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_in_blockquote_ul() -> Result<()> {
+        let text = indoc! {"
+            > *   Foo
+            > *   Bar
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD030::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 3, 1, 9))),
+            rule.to_violation(path, Sourcepos::from((2, 3, 2, 9))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The marker width is read back from the source line, so this also covers the
+    // `> ` prefix being accounted for by `sourcepos` columns.
+    #[test]
+    fn check_errors_in_blockquote_ol_multi_digit_marker() -> Result<()> {
+        let text = indoc! {"
+            > 9.   Foo
+            > 10.   Bar
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD030::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 3, 1, 10))),
+            rule.to_violation(path, Sourcepos::from((2, 3, 2, 11))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * Foo
+            > * Bar
+            >
+            > 10. Baz
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD030::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }
