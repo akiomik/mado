@@ -306,6 +306,7 @@ mod tests {
             9.   Foo
             10.   Bar
             100.   Baz
+            11.  Qux
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
@@ -316,7 +317,8 @@ mod tests {
         let expected = vec![
             rule.to_violation(path.clone(), Sourcepos::from((1, 1, 1, 8))),
             rule.to_violation(path.clone(), Sourcepos::from((2, 1, 2, 9))),
-            rule.to_violation(path, Sourcepos::from((3, 1, 3, 10))),
+            rule.to_violation(path.clone(), Sourcepos::from((3, 1, 3, 10))),
+            rule.to_violation(path, Sourcepos::from((4, 1, 4, 8))),
         ];
         assert_eq!(actual, expected);
         Ok(())
