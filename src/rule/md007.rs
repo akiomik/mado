@@ -1,4 +1,4 @@
-use comrak::nodes::{ListType, NodeValue};
+use comrak::nodes::{ListType, NodeValue, Sourcepos};
 use miette::Result;
 
 use crate::{Document, violation::Violation};
@@ -26,6 +26,20 @@ impl MD007 {
     pub const fn new(indent: usize) -> Self {
         Self { indent }
     }
+
+    fn blockquote_indent(lines: &[String], position: Sourcepos) -> Option<usize> {
+        let indent = position.start.column.checked_sub(1)?;
+        let line = lines.get(position.start.line.checked_sub(1)?)?;
+        let prefix = line.get(..indent)?;
+        let marker = prefix.rfind('>')?;
+        let remainder = prefix.get(marker + 1..)?;
+        Some(
+            remainder
+                .strip_prefix([' ', '\t'])
+                .unwrap_or(remainder)
+                .len(),
+        )
+    }
 }
 
 impl Default for MD007 {
@@ -51,23 +65,20 @@ impl RuleLike for MD007 {
         for node in doc.ast.descendants() {
             if let NodeValue::Item(item) = node.data.borrow().value {
                 let position = node.data.borrow().sourcepos;
-                let mut indent = position.start.column - 1;
+                let mut maybe_indent = position.start.column.checked_sub(1);
 
                 let mut maybe_ancestor = node.parent();
                 while let Some(ancestor) = maybe_ancestor {
                     if ancestor.data.borrow().value == NodeValue::BlockQuote {
-                        let prefix = &doc.lines[position.start.line - 1][..indent];
-                        if let Some(marker) = prefix.rfind('>') {
-                            let remainder = &prefix[marker + 1..];
-                            indent = remainder
-                                .strip_prefix([' ', '\t'])
-                                .unwrap_or(remainder)
-                                .len();
-                        }
+                        maybe_indent = Self::blockquote_indent(&doc.lines, position);
                         break;
                     }
                     maybe_ancestor = ancestor.parent();
                 }
+
+                let Some(indent) = maybe_indent else {
+                    continue;
+                };
 
                 if item.list_type == ListType::Bullet {
                     let level_indent = match maybe_prev_indent {
@@ -220,6 +231,7 @@ mod tests {
             * List
             > * List in blockquote
             >* List in blockquote
+            >\t* List in blockquote
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
