@@ -523,4 +523,35 @@ mod tests {
         assert_eq!(actual, expected);
         Ok(())
     }
+
+    // The remaining arms of `ordered_marker_width` are unreachable through `check`,
+    // because comrak only produces an ordered item where a marker was actually
+    // written. They are exercised directly so the guards stay honest.
+    #[test]
+    fn ordered_marker_width_without_digits() {
+        let lines = vec!["* Foo".to_owned()];
+        let position = Sourcepos::from((1, 1, 1, 5));
+        assert_eq!(MD030::ordered_marker_width(&lines, position), None);
+    }
+
+    #[test]
+    fn ordered_marker_width_without_delimiter() {
+        let lines = vec!["1 Foo".to_owned()];
+        let position = Sourcepos::from((1, 1, 1, 5));
+        assert_eq!(MD030::ordered_marker_width(&lines, position), None);
+    }
+
+    #[test]
+    fn ordered_marker_width_beyond_last_line() {
+        let lines = vec!["1. Foo".to_owned()];
+        let position = Sourcepos::from((2, 1, 2, 6));
+        assert_eq!(MD030::ordered_marker_width(&lines, position), None);
+    }
+
+    #[test]
+    fn ordered_marker_width_with_paren_delimiter() {
+        let lines = vec!["10) Foo".to_owned()];
+        let position = Sourcepos::from((1, 1, 1, 7));
+        assert_eq!(MD030::ordered_marker_width(&lines, position), Some(3));
+    }
 }
