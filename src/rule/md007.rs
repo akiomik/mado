@@ -51,7 +51,23 @@ impl RuleLike for MD007 {
         for node in doc.ast.descendants() {
             if let NodeValue::Item(item) = node.data.borrow().value {
                 let position = node.data.borrow().sourcepos;
-                let indent = position.start.column - 1;
+                let mut indent = position.start.column - 1;
+
+                let mut maybe_ancestor = node.parent();
+                while let Some(ancestor) = maybe_ancestor {
+                    if ancestor.data.borrow().value == NodeValue::BlockQuote {
+                        let prefix = &doc.lines[position.start.line - 1][..indent];
+                        if let Some(marker) = prefix.rfind('>') {
+                            let remainder = &prefix[marker + 1..];
+                            indent = remainder
+                                .strip_prefix([' ', '\t'])
+                                .unwrap_or(remainder)
+                                .len();
+                        }
+                        break;
+                    }
+                    maybe_ancestor = ancestor.parent();
+                }
 
                 if item.list_type == ListType::Bullet {
                     let level_indent = match maybe_prev_indent {
@@ -198,22 +214,55 @@ mod tests {
         Ok(())
     }
 
-    // TODO: This should be passed
-    // #[test]
-    // fn check_no_errors_with_blockquote() -> Result<()> {
-    //     let text = indoc! {"
-    //         * List
-    //         > * List in blockquote
-    //         >* List in blockquote
-    //     "}
-    //     .to_owned();
-    //     let path = Path::new("test.md").to_path_buf();
-    //     let arena = Arena::new();
-    //     let doc = Document::new(&arena, path, text)?;
-    //     let rule = MD007::default();
-    //     let actual = rule.check(&doc)?;
-    //     let expected = vec![];
-    //     assert_eq!(actual, expected);
-    //     Ok(())
-    // }
+    #[test]
+    fn check_no_errors_with_blockquote() -> Result<()> {
+        let text = indoc! {"
+            * List
+            > * List in blockquote
+            >* List in blockquote
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_nested_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > > * List
+            > >     * Nested list
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * List
+            >    * Nested list indented by 3 spaces
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 6, 2, 39)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
 }
