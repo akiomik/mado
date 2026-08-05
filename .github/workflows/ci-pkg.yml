@@ -13,12 +13,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
         with:
-            test-bot: true
             stable: true
         env:
+            # NOTE: This repository is not named `homebrew-mado`, so setup-homebrew cannot
+            #       derive the tap variables itself and both must be set explicitly.
             HOMEBREW_TAP_REPOSITORY: /opt/homebrew/Library/Taps/akiomik/mado
+            HOMEBREW_TAP_NAME: akiomik/mado
       - name: Rename akiomik/mado to akiomik/homebrew-mado
         run: mv /opt/homebrew/Library/Taps/akiomik/mado /opt/homebrew/Library/Taps/akiomik/homebrew-mado
       - name: Checkout repository for updating HEAD
