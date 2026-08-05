@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+* fix: pin houseabsolute/actions-rust-release to v0.0.8 by @akiomik in #351
+* fix: derive ordered list marker width in MD030 by @jetm in #363
+* fix: set HOMEBREW_TAP_NAME in CI Package to unbreak Test Homebrew by @akiomik
+  in #365
+* fix: check lists nested inside blockquotes in MD004, MD005, MD029 and MD030 by
+  @akiomik in #368
+* fix: handle blockquote indentation in MD007 by @Guflly in #369
+
+### Other Changes
+
+* chore: bump packages to v0.3.1 by @akiomik in #352
+* build(deps): bump ignore from 0.4.28 to 0.4.31 by @dependabot in #353
+* build(deps): bump clap from 4.6.3 to 4.6.4 by @dependabot in #354
+* build(deps): bump houseabsolute/actions-rust-release from 0.0.8 to 0.0.9 by
+  @dependabot in #355
+* build(deps): bump globset from 0.4.18 to 0.4.19 by @dependabot in #356
+* build(deps): bump regex from 1.13.0 to 1.13.1 by @dependabot in #357
+* build(deps): bump brace-expansion in /scripts/benchmarks by @dependabot in
+  #358, #364
+* build(deps): bump js-yaml and markdownlint-cli2 in /scripts/benchmarks by
+  @dependabot in #359
+* build(deps): bump toml from 1.1.3+spec-1.1.0 to 1.1.4+spec-1.1.0 by
+  @dependabot in #360
+* build(deps): bump clap_complete from 4.6.7 to 4.6.8 by @dependabot in #361
+* build(deps): bump MinoruSekine/setup-scoop from 5.0.0 to 5.0.1 by @dependabot
+  in #362
+* test: cover the defensive source lookups in MD007 and MD030 by @akiomik in
+  #370
+
 ## 0.3.1 (2026-07-22)
 
 ### Features
