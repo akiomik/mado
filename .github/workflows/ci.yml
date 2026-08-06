@@ -8,6 +8,20 @@ on:
 
 jobs:
 
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      # CD builds the release body out of this section, so a version bump that
+      # leaves the changelog on `## [Unreleased]` has to fail here rather than
+      # at the tag.
+      - name: Check release notes for the current version
+        run: |
+          version=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+          bash scripts/release/extract-changelog.sh "$version" > /dev/null
+
   test:
     name: Test Suite
     runs-on: ubuntu-latest

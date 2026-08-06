@@ -27,7 +27,7 @@ parsed and therefore what gets reported.
 
 ### Added
 
-- Support for use as a [pre-commit] hook (#162)
+- Support for use as a [pre-commit](https://pre-commit.com/) hook (#162)
 
 ### Changed
 
@@ -139,7 +139,6 @@ parsed and therefore what gets reported.
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[pre-commit]: https://pre-commit.com/
 [Unreleased]: https://github.com/akiomik/mado/compare/v0.3.1...HEAD
 [0.3.1]: https://github.com/akiomik/mado/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/akiomik/mado/compare/v0.2.2...v0.3.0
