@@ -44,9 +44,19 @@ jobs:
         toolchain: "1.91.1"
         args: "--locked --release"
         strip: true
+    # `actions-rust-release` uses `changes-file` verbatim as the release body,
+    # so it has to be this version's section rather than the whole changelog.
+    - name: Extract release notes
+      shell: bash
+      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
     - name: Publish artifacts and release
       uses: houseabsolute/actions-rust-release@v0.0.9
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
-        changes-file: CHANGELOG.md
+        changes-file: RELEASE_NOTES.md
+        # Naming `changes-file` above replaced the default, which packaged
+        # CHANGELOG.md and README.md. The archive still wants both.
+        extra-files: |
+          CHANGELOG.md
+          README.md
