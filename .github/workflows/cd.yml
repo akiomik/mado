@@ -50,7 +50,7 @@ jobs:
       shell: bash
       run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
     - name: Publish artifacts and release
-      uses: houseabsolute/actions-rust-release@v0.0.9
+      uses: houseabsolute/actions-rust-release@v1.0.1
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
