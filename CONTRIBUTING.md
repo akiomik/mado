@@ -51,9 +51,13 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    `## [Unreleased]` above it, and update the link definitions at the bottom of
    the file.
 1. Bump `version` in `Cargo.toml` and `version` / `prev_version` in the
-   `justfile`, then refresh the package manifests with `just update-homebrew`,
-   `just update-scoop`, `just update-winget` and `just update-flake`.
+   `justfile`.
 1. Tag the merged commit `vx.y.z` and push the tag.
+1. Once the release is published, refresh the package manifests with
+   `just update-homebrew`, `just update-scoop`, `just update-winget` and
+   `just update-flake`, and open a pull request for them. Every one of these
+   recipes downloads assets of the release being packaged, so none of them can
+   run before CD has published it.
 
 CD then builds the binaries for every platform and publishes a release once all
 of them are packaged. Its body is that version's changelog section, extracted by
