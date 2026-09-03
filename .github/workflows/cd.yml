@@ -36,6 +36,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     - name: Build binary
       uses: houseabsolute/actions-rust-cross@v1
       with:
@@ -69,8 +71,13 @@ jobs:
       contents: write # Creating the release.
 
     steps:
+    # Nothing here pushes, and the steps after this one run third-party code
+    # while this job holds `contents: write`, so keep the token out of the
+    # checkout rather than leaving it in `.git/config` for them.
     - name: Checkout repository
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     # The publish action uses `changes-file` verbatim as the release body, so it
     # has to be this version's section rather than the whole changelog.
     - name: Extract release notes
