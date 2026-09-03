@@ -2,6 +2,9 @@ name: CD # Continuous Deployment
 
 on:
   push:
+    # Whatever this admits, the publish job's `release-tag-regex` has to accept
+    # too, so edit the two together. A tag that only one of them matches builds
+    # every platform and then releases nothing, and the run still ends green.
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
