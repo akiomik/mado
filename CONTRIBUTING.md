@@ -59,5 +59,9 @@ CD then builds the binaries for every platform and publishes a release once all
 of them are packaged. Its body is that version's changelog section, extracted by
 `scripts/release/extract-changelog.sh`.
 
+Re-running CD for a tag that already has a release fails rather than adding to
+it, because an immutable release cannot be changed at all. Delete the release
+first if you need to build it again.
+
 CI checks that the section for the version in `Cargo.toml` exists, so a bump
 without a changelog section fails before it reaches the tag.
