@@ -6,11 +6,11 @@ on:
       - '[v]?[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    name: Release - ${{ matrix.platform.os-name }}
+  package:
+    name: Package - ${{ matrix.platform.os-name }}
     runs-on: ${{ matrix.platform.runs-on }}
 
     strategy:
@@ -44,19 +44,40 @@ jobs:
         toolchain: "1.91.1"
         args: "--locked --release"
         strip: true
-    # `actions-rust-release` uses `changes-file` verbatim as the release body,
-    # so it has to be this version's section rather than the whole changelog.
-    - name: Extract release notes
-      shell: bash
-      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
-    - name: Publish artifacts and release
-      uses: houseabsolute/actions-rust-release@v0.0.9
+    # This action no longer creates the release, so its `changes-file` only
+    # picks a file to archive. Empty it, or the action looks for the `Changes.md`
+    # this repository does not have; `extra-files` says what the archive holds.
+    - name: Package artifacts
+      uses: houseabsolute/actions-rust-release@v1.0.1
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
-        changes-file: RELEASE_NOTES.md
-        # Naming `changes-file` above replaced the default, which packaged
-        # CHANGELOG.md and README.md. The archive still wants both.
+        changes-file: ""
         extra-files: |
           CHANGELOG.md
           README.md
+
+  publish:
+    name: Publish GitHub release
+    # One release for the whole matrix, created once every platform has
+    # packaged, rather than one race per platform.
+    needs: package
+    runs-on: ubuntu-latest # The publish action refuses to run anywhere else.
+
+    permissions:
+      actions: read # Listing this run's artifacts.
+      contents: write # Creating the release.
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+    # The publish action uses `changes-file` verbatim as the release body, so it
+    # has to be this version's section rather than the whole changelog.
+    - name: Extract release notes
+      shell: bash
+      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
+    - name: Publish release
+      uses: houseabsolute/actions-rust-release/publish@v1.0.1
+      with:
+        executable-name: mado
+        changes-file: RELEASE_NOTES.md

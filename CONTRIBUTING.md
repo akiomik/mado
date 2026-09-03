@@ -55,9 +55,9 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    `just update-scoop`, `just update-winget` and `just update-flake`.
 1. Tag the merged commit `vx.y.z` and push the tag.
 
-CD then builds the binaries and opens a draft release whose body is that
-version's changelog section, extracted by
-`scripts/release/extract-changelog.sh`. Review the draft and publish it.
+CD then builds the binaries for every platform and publishes a release once all
+of them are packaged. Its body is that version's changelog section, extracted by
+`scripts/release/extract-changelog.sh`.
 
 CI checks that the section for the version in `Cargo.toml` exists, so a bump
 without a changelog section fails before it reaches the tag.
