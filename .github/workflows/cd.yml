@@ -12,8 +12,25 @@ permissions:
   contents: read
 
 jobs:
+  release-notes:
+    name: Check release notes
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    # The release body is this tag's changelog section, and the job that reads
+    # it runs after the matrix. A tag the changelog does not name would fail
+    # there, having built five platforms first, so find that out up front.
+    - name: Extract release notes
+      shell: bash
+      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > /dev/null
+
   package:
     name: Package - ${{ matrix.platform.os-name }}
+    needs: release-notes
     runs-on: ${{ matrix.platform.runs-on }}
 
     strategy:
