@@ -59,6 +59,10 @@ CD then builds the binaries for every platform and publishes a release once all
 of them are packaged. Its body is that version's changelog section, extracted by
 `scripts/release/extract-changelog.sh`.
 
+Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
+to look at. It also stops before building anything if the tag disagrees with
+`version` in `Cargo.toml`, or if the changelog has no section for it.
+
 Re-running CD for a tag that already has a release fails rather than adding to
 it, because an immutable release cannot be changed at all. Delete the release
 first if you need to build it again.
