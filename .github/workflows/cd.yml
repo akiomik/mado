@@ -3,7 +3,7 @@ name: CD # Continuous Deployment
 on:
   push:
     tags:
-      - '[v]?[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: read
@@ -81,8 +81,8 @@ jobs:
       with:
         executable-name: mado
         changes-file: RELEASE_NOTES.md
-        # The tag trigger above admits a bare `0.4.0`, which the default regex
-        # would release under asset URLs the package manifests do not use, as
-        # they all spell the tag `v{version}`. v0 released on a `v` prefix, so
-        # keep that gate rather than widening it as part of this migration.
+        # The default would also release a tag with no `v`, under asset URLs
+        # the package manifests cannot use, since they all spell the tag
+        # `v{version}`. The trigger above already says this, and saying it here
+        # too keeps a tag that reaches this job from publishing such a release.
         release-tag-regex: '^v\d+\.\d+\.\d+$'
