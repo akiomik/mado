@@ -2,15 +2,53 @@ name: CD # Continuous Deployment
 
 on:
   push:
+    # Whatever this admits, the publish job's `release-tag-regex` has to accept
+    # too, so edit the two together. A tag that only one of them matches builds
+    # every platform and then releases nothing, and the run still ends green.
     tags:
-      - '[v]?[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  # Publishing checks for an existing release and then creates one, so two runs
+  # for a tag can both pass that check and race. Queue them instead. Never
+  # cancel one part way through: it may be the run that has already published.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Release - ${{ matrix.platform.os-name }}
+  preflight:
+    name: Check the tag
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    # CI compares the changelog against the version in `Cargo.toml`, and never
+    # sees the tag, so a tag ahead of `Cargo.toml` reaches here unnoticed and
+    # would release binaries reporting the version before it.
+    - name: Check the tag against Cargo.toml
+      shell: bash
+      run: |
+        version=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+        if [ "$version" != "${GITHUB_REF_NAME#v}" ]; then
+          echo "$GITHUB_REF_NAME does not match version $version in Cargo.toml" >&2
+          exit 1
+        fi
+    # The release body is this tag's changelog section, and the job that reads
+    # it runs after the matrix. A tag the changelog does not name would fail
+    # there, having built five platforms first, so find that out up front.
+    - name: Extract release notes
+      shell: bash
+      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > /dev/null
+
+  package:
+    name: Package - ${{ matrix.platform.os-name }}
+    needs: preflight
     runs-on: ${{ matrix.platform.runs-on }}
 
     strategy:
@@ -36,6 +74,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     - name: Build binary
       uses: houseabsolute/actions-rust-cross@v1
       with:
@@ -44,19 +84,50 @@ jobs:
         toolchain: "1.91.1"
         args: "--locked --release"
         strip: true
-    # `actions-rust-release` uses `changes-file` verbatim as the release body,
-    # so it has to be this version's section rather than the whole changelog.
-    - name: Extract release notes
-      shell: bash
-      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
-    - name: Publish artifacts and release
-      uses: houseabsolute/actions-rust-release@v0.0.9
+    # This action no longer creates the release, so its `changes-file` only
+    # picks a file to archive. Empty it, or the action looks for the `Changes.md`
+    # this repository does not have; `extra-files` says what the archive holds.
+    - name: Package artifacts
+      uses: houseabsolute/actions-rust-release@v1.0.1
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
-        changes-file: RELEASE_NOTES.md
-        # Naming `changes-file` above replaced the default, which packaged
-        # CHANGELOG.md and README.md. The archive still wants both.
+        changes-file: ""
         extra-files: |
           CHANGELOG.md
           README.md
+
+  publish:
+    name: Publish GitHub release
+    # One release for the whole matrix, created once every platform has
+    # packaged, rather than one race per platform.
+    needs: package
+    runs-on: ubuntu-latest # The publish action refuses to run anywhere else.
+
+    permissions:
+      actions: read # Listing this run's artifacts.
+      contents: write # Creating the release.
+
+    steps:
+    # Nothing here pushes, and the steps after this one run third-party code
+    # while this job holds `contents: write`, so keep the token out of the
+    # checkout rather than leaving it in `.git/config` for them.
+    - name: Checkout repository
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    # The publish action uses `changes-file` verbatim as the release body, so it
+    # has to be this version's section rather than the whole changelog.
+    - name: Extract release notes
+      shell: bash
+      run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
+    - name: Publish release
+      uses: houseabsolute/actions-rust-release/publish@v1.0.1
+      with:
+        executable-name: mado
+        changes-file: RELEASE_NOTES.md
+        # The default would also release a tag with no `v`, under asset URLs
+        # the package manifests cannot use, since they all spell the tag
+        # `v{version}`. The trigger above already says this, and saying it here
+        # too keeps a tag that reaches this job from publishing such a release.
+        release-tag-regex: '^v\d+\.\d+\.\d+$'
