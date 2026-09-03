@@ -51,19 +51,19 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    `## [Unreleased]` above it, and update the link definitions at the bottom of
    the file.
 1. Bump the version in the files the tagged commit has to be right about:
-   `version` in `Cargo.toml` and `Cargo.lock`, `version` / `prev_version` in the
-   `justfile`, `VERSION` in `action/entrypoint.sh`, and the
-   `akiomik/mado@vx.y.z` pins in `README.md`. The GitHub Action downloads the
-   release `entrypoint.sh` names, so a tag that leaves it behind runs the
-   previous version's binary.
+   `version` in `Cargo.toml` and `Cargo.lock`, `VERSION` in
+   `action/entrypoint.sh`, and the `akiomik/mado@vx.y.z` pins in `README.md`.
+   The GitHub Action downloads the release `entrypoint.sh` names, so a tag that
+   leaves it behind runs the previous version's binary.
 1. Tag the merged commit `vx.y.z` and push the tag. That starts CD.
-1. Once CD has published the release, refresh the package manifests with
-   `just update-homebrew`, `just update-scoop`, `just update-winget` and
-   `just update-flake`, and open a pull request for them. Every one of these
-   recipes downloads assets of the release being packaged, so none of them can
-   run any earlier. This is also why `flake.nix` and everything under `pkg/`
-   still name the previous version at the moment the tag is pushed, and why
-   `nix run github:akiomik/mado/vx.y.z` gets the release before it.
+1. Once CD has published the release, set `version` / `prev_version` in the
+   `justfile`, refresh the package manifests with `just update-homebrew`,
+   `just update-scoop`, `just update-winget` and `just update-flake`, and open a
+   pull request for them. Every one of these recipes downloads assets of the
+   release being packaged, so none of them can run any earlier. This is also why
+   `flake.nix` and the manifests under `pkg/` still name the previous version at
+   the moment the tag is pushed, and why `nix run github:akiomik/mado/vx.y.z`
+   gets the release before it.
 
 CD builds the binaries for every platform and publishes one release once all of
 them are packaged. Its body is that version's changelog section, extracted by
