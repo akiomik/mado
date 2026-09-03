@@ -81,3 +81,8 @@ jobs:
       with:
         executable-name: mado
         changes-file: RELEASE_NOTES.md
+        # The tag trigger above admits a bare `0.4.0`, which the default regex
+        # would release under asset URLs the package manifests do not use, as
+        # they all spell the tag `v{version}`. v0 released on a `v` prefix, so
+        # keep that gate rather than widening it as part of this migration.
+        release-tag-regex: '^v\d+\.\d+\.\d+$'
