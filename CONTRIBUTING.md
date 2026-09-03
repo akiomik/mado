@@ -50,17 +50,20 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
 1. Rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, add a fresh empty
    `## [Unreleased]` above it, and update the link definitions at the bottom of
    the file.
-1. Bump `version` in `Cargo.toml` and `version` / `prev_version` in the
-   `justfile`.
-1. Tag the merged commit `vx.y.z` and push the tag.
-1. Once the release is published, refresh the package manifests with
+1. Bump the version everywhere it is written down: `version` in `Cargo.toml`
+   and `Cargo.lock`, `version` / `prev_version` in the `justfile`, `VERSION` in
+   `action/entrypoint.sh`, and the `akiomik/mado@vx.y.z` pins in `README.md`.
+   The GitHub Action downloads the release `entrypoint.sh` names, so a tag that
+   leaves it behind runs the previous version's binary.
+1. Tag the merged commit `vx.y.z` and push the tag. That starts CD.
+1. Once CD has published the release, refresh the package manifests with
    `just update-homebrew`, `just update-scoop`, `just update-winget` and
    `just update-flake`, and open a pull request for them. Every one of these
    recipes downloads assets of the release being packaged, so none of them can
-   run before CD has published it.
+   run any earlier.
 
-CD then builds the binaries for every platform and publishes a release once all
-of them are packaged. Its body is that version's changelog section, extracted by
+CD builds the binaries for every platform and publishes one release once all of
+them are packaged. Its body is that version's changelog section, extracted by
 `scripts/release/extract-changelog.sh`.
 
 Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
