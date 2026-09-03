@@ -25,7 +25,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     # CI compares the changelog against the version in `Cargo.toml`, and never
@@ -73,11 +73,11 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     - name: Build binary
-      uses: houseabsolute/actions-rust-cross@v1
+      uses: houseabsolute/actions-rust-cross@21b0f18dc621b25bfae556ff2791fca4173121e8 # v1.0.8
       with:
         command: build
         target: ${{ matrix.platform.target }}
@@ -88,7 +88,7 @@ jobs:
     # picks a file to archive. Empty it, or the action looks for the `Changes.md`
     # this repository does not have; `extra-files` says what the archive holds.
     - name: Package artifacts
-      uses: houseabsolute/actions-rust-release@v1.0.1
+      uses: houseabsolute/actions-rust-release@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1.0.1
       with:
         executable-name: mado
         target: ${{ matrix.platform.target }}
@@ -113,7 +113,7 @@ jobs:
     # while this job holds `contents: write`, so keep the token out of the
     # checkout rather than leaving it in `.git/config` for them.
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     # The publish action uses `changes-file` verbatim as the release body, so it
@@ -122,7 +122,7 @@ jobs:
       shell: bash
       run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
     - name: Publish release
-      uses: houseabsolute/actions-rust-release/publish@v1.0.1
+      uses: houseabsolute/actions-rust-release/publish@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1.0.1
       with:
         executable-name: mado
         changes-file: RELEASE_NOTES.md

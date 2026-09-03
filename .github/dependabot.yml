@@ -17,11 +17,10 @@ updates:
     groups:
       # CD calls `actions-rust-release` to package and its `publish` subaction to
       # release, and the two only agree about archive names and artifact layout
-      # at the same version. While both are pinned to a tag, Dependabot names
-      # them after the repository alone and already updates them together; a
-      # switch to commit SHAs would make them two dependencies, and a PR raising
-      # only one of them would leave CD green and the release wrong, which is
-      # not visible until a tag is pushed. Group them so that stays impossible.
+      # at the same version. Pinned to commit SHAs they are two dependencies to
+      # Dependabot, which would raise them one at a time, and a PR that moves
+      # only one half leaves CD green and the release wrong — invisible until a
+      # tag is pushed. Group them so they can only move together.
       actions-rust-release:
         patterns:
           - "houseabsolute/actions-rust-release*"

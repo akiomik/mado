@@ -24,7 +24,7 @@ jobs:
       - name: Rename akiomik/mado to akiomik/homebrew-mado
         run: mv /opt/homebrew/Library/Taps/akiomik/mado /opt/homebrew/Library/Taps/akiomik/homebrew-mado
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Show the latest commit
         run: git log -1
       - name: Run Homebrew info
@@ -39,9 +39,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@v5.0.1
+        uses: MinoruSekine/setup-scoop@f1cc59be496ed3a1801a5f64efe5c60ba3d6bb75 # v5.0.1
       - name: Install Mado via Scoop
         run: scoop install pkg\scoop\mado.json
 
@@ -50,11 +50,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # NOTE: Cyberboss/install-winget@1 may reach rate limit and not install winget,
       #       so use scoop instead
       - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@v5.0.1
+        uses: MinoruSekine/setup-scoop@f1cc59be496ed3a1801a5f64efe5c60ba3d6bb75 # v5.0.1
       - name: Install WinGet
         run: scoop install winget
       - name: Run winget validate
@@ -68,7 +68,7 @@ jobs:
     name: Test Nix
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v7
-        - uses: cachix/install-nix-action@v31
+        - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         - run: nix build
         - run: nix flake check
