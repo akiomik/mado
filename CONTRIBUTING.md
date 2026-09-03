@@ -63,9 +63,9 @@ Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
 to look at. It also stops before building anything if the tag disagrees with
 `version` in `Cargo.toml`, or if the changelog has no section for it.
 
-Re-running CD for a tag that already has a release fails rather than adding to
-it, because an immutable release cannot be changed at all. Delete the release
-first if you need to build it again.
+Re-running CD for a tag that already has a release fails: the publish action
+refuses to add to one, whether or not it could. Delete the release first if you
+need to build the tag again.
 
 CI checks that the section for the version in `Cargo.toml` exists, so a bump
 without a changelog section fails before it reaches the tag.

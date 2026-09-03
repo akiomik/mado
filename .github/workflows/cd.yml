@@ -12,9 +12,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Two runs for one tag race for the release, and the loser fails outright now
-  # that publishing refuses an existing release. Never cancel one part way
-  # through: it could be the run that has already created it.
+  # Publishing checks for an existing release and then creates one, so two runs
+  # for a tag can both pass that check and race. Queue them instead. Never
+  # cancel one part way through: it may be the run that has already published.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
