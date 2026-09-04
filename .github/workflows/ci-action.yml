@@ -8,9 +8,19 @@ on:
 
 jobs:
 
-  test:
-    name: Test Action
-    runs-on: ubuntu-latest
+  download:
+    name: Download - ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.runs-on }}
+
+    strategy:
+      fail-fast: false
+      # The entrypoint builds the asset name from `uname -m`, which differs
+      # between these two, so testing only one leaves the other's name
+      # unchecked. Both are free for public repositories.
+      matrix:
+        runs-on:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
 
     permissions:
       contents: read # Reading the newest release.
@@ -38,3 +48,27 @@ jobs:
         uses: ./
         with:
           version: ${{ steps.release.outputs.tag }}
+
+  # `Test Action` is a required status check on `main`, matched by name, so it
+  # has to stay one context however many runners the matrix grows to. This job
+  # is that name; the matrix reports under its own.
+  test:
+    name: Test Action
+    needs: download
+    # Not `always()`: that reports a hard failure on `Test Action` when a run is
+    # cancelled. This still runs when the matrix fails, which is the case that
+    # would otherwise skip the gate and leave the required check unreported.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    permissions: {}
+
+    steps:
+      - name: Check the matrix result
+        env:
+          RESULT: ${{ needs.download.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "the action's download matrix did not pass: $RESULT" >&2
+            exit 1
+          fi

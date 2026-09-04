@@ -27,6 +27,9 @@ parsed and therefore what gets reported.
   lists nested inside a blockquote are checked (#368)
 - MD007: measure indentation from the end of the blockquote prefix instead of
   the start of the line (#369)
+- The GitHub Action downloads the `arm64` release asset on arm64 Linux runners,
+  where it previously asked for an `aarch64` one that no release publishes and
+  failed (#395)
 
 ## [0.3.1] - 2026-07-22
 
