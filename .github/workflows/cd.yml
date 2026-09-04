@@ -28,17 +28,12 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
-    # CI compares the changelog against the version in `Cargo.toml`, and never
-    # sees the tag, so a tag ahead of `Cargo.toml` reaches here unnoticed and
-    # would release binaries reporting the version before it.
-    - name: Check the tag against Cargo.toml
+    # CI runs this on pull requests and never sees a tag, but a tag can be
+    # pushed at any commit, so the release is the last place a version the rest
+    # of the tree disagrees with can still be stopped.
+    - name: Check the tag against the version in the tree
       shell: bash
-      run: |
-        version=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
-        if [ "$version" != "${GITHUB_REF_NAME#v}" ]; then
-          echo "$GITHUB_REF_NAME does not match version $version in Cargo.toml" >&2
-          exit 1
-        fi
+      run: bash scripts/release/check-versions.sh "$GITHUB_REF_NAME"
     # The release body is this tag's changelog section, and the job that reads
     # it runs after the matrix. A tag the changelog does not name would fail
     # there, having built five platforms first, so find that out up front.

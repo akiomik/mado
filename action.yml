@@ -10,6 +10,10 @@ inputs:
     description: "Arguments passed to Mado. Defaults to `check .`."
     required: false
     default: "check ."
+  version:
+    description: "Mado release to download, like `v0.3.1`. Defaults to the release this action was published with."
+    required: false
+    default: ""
 
 runs:
   using: 'composite'
@@ -20,3 +24,4 @@ runs:
       env:
         INSTALL_DIR: .
         INPUT_ARGS: ${{ inputs.args }}
+        INPUT_VERSION: ${{ inputs.version }}

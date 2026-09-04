@@ -1,7 +1,17 @@
 #!/bin/bash
 
 COMMAND="mado"
-VERSION="v0.3.1"
+# The release published alongside this version of the action. The `version`
+# input overrides it, because a version bump names its release before the tag
+# that creates it exists.
+DEFAULT_VERSION="v0.3.1"
+VERSION="${INPUT_VERSION:-$DEFAULT_VERSION}"
+# This ends up in a path and a URL, and a workflow can wire the input to
+# anything, so accept only something shaped like one of our tags.
+if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+  echo "'$VERSION' is not a mado release tag" >&2
+  exit 1
+fi
 INSTALL_DIR="$HOME/bin"
 COMMAND_PATH="$INSTALL_DIR/$COMMAND"
 

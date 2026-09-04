@@ -19,8 +19,20 @@ jobs:
       # at the tag.
       - name: Check release notes for the current version
         run: |
-          version=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+          version=$(bash scripts/release/version.sh)
           bash scripts/release/extract-changelog.sh "$version" > /dev/null
+
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A tag whose `entrypoint.sh` or README pins were left behind ships the
+      # previous release's binary to everyone using the action, and CD cannot
+      # see it on its own: it only compares the tag against `Cargo.toml`.
+      - name: Check the version is the same everywhere the tag carries it
+        run: bash scripts/release/check-versions.sh
 
   test:
     name: Test Suite
