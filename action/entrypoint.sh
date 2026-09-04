@@ -15,6 +15,10 @@ fi
 INSTALL_DIR="$HOME/bin"
 COMMAND_PATH="$INSTALL_DIR/$COMMAND"
 
+# Known broken, tracked in #393: this tests `./mado`, not the `$COMMAND_PATH`
+# below, and the script has no `set -e`. A failed download therefore falls
+# through to whatever `$COMMAND_PATH` already is. Left alone here on purpose,
+# so this fix stays reviewable.
 if [[ ! -x "$COMMAND" ]]; then
   ARCH=$(uname -m)
   UNAME=$(uname -s)

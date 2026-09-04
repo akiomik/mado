@@ -55,7 +55,10 @@ jobs:
   test:
     name: Test Action
     needs: download
-    if: always() # A failed matrix would otherwise skip this, and a skipped required check never reports.
+    # Not `always()`: that reports a hard failure on `Test Action` when a run is
+    # cancelled. This still runs when the matrix fails, which is the case that
+    # would otherwise skip the gate and leave the required check unreported.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
 
     permissions: {}
