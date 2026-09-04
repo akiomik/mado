@@ -11,8 +11,30 @@ jobs:
   test:
     name: Test Action
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read # Reading the newest release.
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The action downloads the release it was published with, and a version
+      # bump names that release before the tag creating it exists, so testing
+      # the default made this job fail on every bump. Point it at a release
+      # that is there. The `version` job is what keeps the default from being
+      # left behind; nothing downloads it until it has a tag.
+      - name: Find the newest release
+        id: release
+        run: |
+          if ! tag=$(gh release view --repo akiomik/mado --json tagName --jq .tagName) ||
+            [ -z "$tag" ]; then
+            echo "found no published release to test the action against" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Use local action
         uses: ./
+        with:
+          version: ${{ steps.release.outputs.tag }}

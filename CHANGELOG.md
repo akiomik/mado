@@ -13,6 +13,11 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Added
+
+- The GitHub Action takes a `version` input, so a workflow can run a mado
+  release other than the one the action was published with (#390)
+
 ### Fixed
 
 - MD030: derive the marker width from the item's own ordinal, so ordered items

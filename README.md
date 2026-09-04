@@ -164,6 +164,10 @@ Mado is compatible with GitHub Actions.
     args: '--config path/to/mado.toml check path/to/*.md'
 ```
 
+The action downloads the mado release it was published with. Setting the
+`version` input names a different release to run; a pin from before the input
+was added ignores it.
+
 ## Development
 
 [just](https://github.com/casey/just/tree/master) is required.
