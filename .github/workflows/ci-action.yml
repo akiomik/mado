@@ -21,7 +21,8 @@ jobs:
       # The action downloads the release it was published with, and a version
       # bump names that release before the tag creating it exists, so testing
       # the default made this job fail on every bump. Point it at a release
-      # that is there; the `version` job is what checks the default.
+      # that is there. The `version` job is what keeps the default from being
+      # left behind; nothing downloads it until it has a tag.
       - name: Find the newest release
         id: release
         run: |

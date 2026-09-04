@@ -23,7 +23,7 @@ mismatch=0
 
 if [ $# -gt 0 ]; then
   tag="$1"
-  if [ "${tag#v}" != "$version" ]; then
+  if [ "$tag" != "v$version" ]; then
     echo "$0: tag $tag, Cargo.toml says $version" >&2
     mismatch=1
   fi

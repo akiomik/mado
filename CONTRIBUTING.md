@@ -71,8 +71,8 @@ them are packaged. Its body is that version's changelog section, extracted by
 `scripts/release/extract-changelog.sh`.
 
 Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
-to look at. It also stops before building anything if the tag disagrees with
-`version` in `Cargo.toml`, or if the changelog has no section for it.
+to look at. It also stops before building anything if the tag disagrees with any
+of the versions in step 2, or if the changelog has no section for it.
 
 Re-running CD for a tag that already has a release fails: the publish action
 refuses to add to one, whether or not it could. Delete the release first if you
