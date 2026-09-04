@@ -8,8 +8,8 @@ on:
 
 jobs:
 
-  test:
-    name: Test Action - ${{ matrix.runs-on }}
+  download:
+    name: Download - ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
 
     strategy:
@@ -48,3 +48,24 @@ jobs:
         uses: ./
         with:
           version: ${{ steps.release.outputs.tag }}
+
+  # `Test Action` is a required status check on `main`, matched by name, so it
+  # has to stay one context however many runners the matrix grows to. This job
+  # is that name; the matrix reports under its own.
+  test:
+    name: Test Action
+    needs: download
+    if: always() # A failed matrix would otherwise skip this, and a skipped required check never reports.
+    runs-on: ubuntu-latest
+
+    permissions: {}
+
+    steps:
+      - name: Check the matrix result
+        env:
+          RESULT: ${{ needs.download.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "the action's download matrix did not pass: $RESULT" >&2
+            exit 1
+          fi
