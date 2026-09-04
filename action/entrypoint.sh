@@ -18,6 +18,13 @@ COMMAND_PATH="$INSTALL_DIR/$COMMAND"
 if [[ ! -x "$COMMAND" ]]; then
   ARCH=$(uname -m)
   UNAME=$(uname -s)
+  # Linux reports `aarch64` where the release names the same architecture
+  # `arm64`; macOS reports `arm64` already. The asset names come from
+  # `houseabsolute/actions-rust-release` in `cd.yml`, so this mapping follows
+  # what that action publishes, not what `cd.yml` calls the platform.
+  if [[ "$ARCH" == "aarch64" ]]; then
+    ARCH="arm64"
+  fi
   if [[ "$UNAME" == "Darwin" ]]; then
     DOWNLOAD_FILE="mado-macOS-$ARCH.tar.gz"
   elif [[ "$UNAME" == CYGWIN* || "$UNAME" == MINGW* || "$UNAME" == MSYS* ]]; then

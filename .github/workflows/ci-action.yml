@@ -9,8 +9,18 @@ on:
 jobs:
 
   test:
-    name: Test Action
-    runs-on: ubuntu-latest
+    name: Test Action - ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.runs-on }}
+
+    strategy:
+      fail-fast: false
+      # The entrypoint builds the asset name from `uname -m`, which differs
+      # between these two, so testing only one leaves the other's name
+      # unchecked. Both are free for public repositories.
+      matrix:
+        runs-on:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
 
     permissions:
       contents: read # Reading the newest release.
