@@ -36,6 +36,10 @@ parsed and therefore what gets reported.
   no padding. A span whose delimiters sit on different lines is left unjudged
   rather than reported, since nothing recorded about it describes what was
   written against those delimiters (#391)
+- MD033, MD034, MD037, MD038 and MD039: report the column an inline was written
+  at when it sits in a table cell containing an escaped pipe. Each `\|` before
+  the inline moved the report one column to the left of the character it named
+  (#405)
 
 ## [0.3.1] - 2026-07-22
 

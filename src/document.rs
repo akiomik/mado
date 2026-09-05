@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use comrak::nodes::{AstNode, NodeValue};
+use comrak::nodes::{AstNode, NodeValue, Sourcepos};
 use comrak::{Arena, Options, parse_document};
 use miette::IntoDiagnostic as _;
 use miette::Result;
@@ -13,6 +14,10 @@ pub struct Document<'a> {
     pub ast: &'a AstNode<'a>,
     pub text: String,
     pub lines: Vec<String>,
+
+    /// Where each column comrak reports on a line was written, for the lines
+    /// where the two part company. See [`Document::written_position`].
+    written_columns: HashMap<usize, Vec<usize>>,
 }
 
 impl<'a> Document<'a> {
@@ -23,12 +28,14 @@ impl<'a> Document<'a> {
         options.extension.table = true;
         let ast = parse_document(arena, &text, &options);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
+        let written_columns = Self::written_columns(ast, &lines, &text);
 
         Ok(Self {
             path,
             ast,
             text,
             lines,
+            written_columns,
         })
     }
 
@@ -36,6 +43,139 @@ impl<'a> Document<'a> {
     pub fn open(arena: &'a Arena<'a>, path: &Path) -> Result<Self> {
         let text = fs::read_to_string(path).into_diagnostic()?;
         Self::new(arena, path.to_path_buf(), text)
+    }
+
+    /// The position as written, for one comrak measured against a table cell.
+    ///
+    /// comrak unescapes a table cell before it parses the cell's inlines, so a
+    /// column reported from inside one counts each `\|` the cell was written
+    /// with as the single byte it was unescaped to. Every inline after the
+    /// escape therefore lands one column to the left of where it was written,
+    /// and one more for each further escape. This puts those bytes back, so the
+    /// column names the character a reader sees at it.
+    ///
+    /// A position from anywhere else is returned unchanged, and so is one
+    /// outside the line it names — a rule that has done its own column
+    /// arithmetic can hand over either.
+    #[inline]
+    #[must_use]
+    pub fn written_position(&self, position: Sourcepos) -> Sourcepos {
+        let mut written = position;
+        written.start.column = self.written_column(position.start.line, position.start.column);
+        written.end.column = self.written_column(position.end.line, position.end.column);
+        written
+    }
+
+    fn written_column(&self, line: usize, column: usize) -> usize {
+        self.written_columns
+            .get(&line)
+            .and_then(|columns| columns.get(column))
+            .copied()
+            .unwrap_or(column)
+    }
+
+    /// The column table [`Document::written_position`] reads, keyed by line.
+    ///
+    /// Only a line carrying a table cell that was written with a `\|` gets an
+    /// entry; on every other line the two columns are equal, and leaving those
+    /// out keeps the table empty for the documents that have no escape at all.
+    /// Within an entry, index and value are the reported and the written
+    /// column, and the columns outside the affected cells map to themselves.
+    ///
+    /// A cell's own `sourcepos` is built from the raw line rather than from the
+    /// unescaped content, so it is unshifted and gives the region to walk.
+    fn written_columns(
+        ast: &'a AstNode<'a>,
+        lines: &[String],
+        text: &str,
+    ) -> HashMap<usize, Vec<usize>> {
+        let mut written_columns = HashMap::new();
+
+        // Walking the tree costs more than the escape is common, and a document
+        // written without one has no shifted column to correct.
+        if !text.contains(r"\|") {
+            return written_columns;
+        }
+
+        for node in ast.descendants() {
+            if !matches!(node.data.borrow().value, NodeValue::TableCell) {
+                continue;
+            }
+
+            let position = node.data.borrow().sourcepos;
+            let Some(line) = position
+                .start
+                .line
+                .checked_sub(1)
+                .and_then(|index| lines.get(index))
+            else {
+                continue;
+            };
+
+            let length = line.len();
+            let start = position.start.column;
+            let end = position.end.column.min(length);
+            let Some(cell) = start.checked_sub(1).and_then(|index| line.get(index..end)) else {
+                continue;
+            };
+
+            let dropped = Self::dropped_columns(cell, start);
+            if dropped.is_empty() {
+                continue;
+            }
+
+            let columns = written_columns
+                .entry(position.start.line)
+                .or_insert_with(|| (0..=length + 1).collect::<Vec<_>>());
+
+            let mut dropped = dropped.into_iter().peekable();
+            let mut reported = start;
+            for written in start..=end {
+                // A dropped column is one comrak never reports, so it is passed
+                // over and every column after it in the cell moves right by one.
+                if dropped.next_if_eq(&written).is_some() {
+                    continue;
+                }
+
+                if let Some(column) = columns.get_mut(reported) {
+                    *column = written;
+                }
+
+                reported += 1;
+            }
+        }
+
+        written_columns
+    }
+
+    /// The columns of `cell`, which starts at column `start`, that comrak drops
+    /// before it parses the cell's inlines.
+    ///
+    /// Those are the backslashes of the cell's `\|` escapes, and nothing else:
+    /// a table cell is unescaped for its pipes alone, and every other backslash
+    /// reaches the inline parser, which records the columns it was written at.
+    ///
+    /// A backslash that is itself escaped does not start an escape, so the run
+    /// is walked rather than the pairs matched: in `\\|` the second backslash
+    /// is the first one's escape, and the pipe stands on its own. comrak leaves
+    /// all three bytes where they were written, and so does this.
+    fn dropped_columns(cell: &str, start: usize) -> Vec<usize> {
+        let mut dropped = vec![];
+        let mut after_backslash = false;
+
+        for (offset, byte) in cell.bytes().enumerate() {
+            if after_backslash {
+                if byte == b'|' {
+                    dropped.push(start + offset - 1);
+                }
+
+                after_backslash = false;
+            } else if byte == b'\\' {
+                after_backslash = true;
+            }
+        }
+
+        dropped
     }
 
     #[inline]
@@ -89,6 +229,84 @@ mod tests {
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
         assert_eq!(doc.front_matter(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn written_position_in_table_cell() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\|y\|z w | c |
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+
+        // `w` is at column 11, and comrak has it at 9 — one for each `\|`. The
+        // shift starts at the first escape, so the `x` before it and the `c` in
+        // the next cell, which was written without one, are where they say.
+        assert_eq!(
+            doc.written_position(Sourcepos::from((3, 9, 3, 9))),
+            Sourcepos::from((3, 11, 3, 11))
+        );
+        assert_eq!(
+            doc.written_position(Sourcepos::from((3, 3, 3, 3))),
+            Sourcepos::from((3, 3, 3, 3))
+        );
+        assert_eq!(
+            doc.written_position(Sourcepos::from((3, 15, 3, 15))),
+            Sourcepos::from((3, 15, 3, 15))
+        );
+        Ok(())
+    }
+
+    // `\\` is an escaped backslash, so the pipe after it stands on its own and
+    // comrak drops nothing. Matching `\|` as a pair would find one across the
+    // two and shift every column after it that was never shifted.
+    #[test]
+    fn written_position_with_escaped_backslash() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\\|y w | c |
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        let position = Sourcepos::from((3, 8, 3, 8));
+        assert_eq!(doc.written_position(position), position);
+        Ok(())
+    }
+
+    #[test]
+    fn written_position_without_escaped_pipe() -> Result<()> {
+        let text = indoc! {"
+            | a | b |
+            | --- | --- |
+            | x | c |
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        let position = Sourcepos::from((3, 3, 3, 3));
+        assert_eq!(doc.written_position(position), position);
+        Ok(())
+    }
+
+    // An escape outside a table is `CommonMark`'s own, and comrak reports the
+    // columns of the line as written for it.
+    #[test]
+    fn written_position_outside_table() -> Result<()> {
+        let text = r"a \| b".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        let position = Sourcepos::from((1, 3, 1, 4));
+        assert_eq!(doc.written_position(position), position);
         Ok(())
     }
 
