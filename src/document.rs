@@ -15,9 +15,21 @@ pub struct Document<'a> {
     pub text: String,
     pub lines: Vec<String>,
 
-    /// Where each column comrak reports on a line was written, for the lines
-    /// where the two part company. See [`Document::written_position`].
-    written_columns: FxHashMap<usize, Vec<usize>>,
+    /// The regions comrak unescaped, by the line they were written on. See
+    /// [`Document::written_position`].
+    unescaped_regions: FxHashMap<usize, Vec<UnescapedRegion>>,
+}
+
+/// A run of one line's columns that comrak unescaped the pipes of before it
+/// parsed the inlines in it.
+#[derive(Debug, Clone)]
+struct UnescapedRegion {
+    /// The column the region begins at, which comrak reports and the line was
+    /// written with alike: nothing has been dropped yet where a region starts.
+    start: usize,
+
+    /// The columns comrak dropped, as written, in the order they appear.
+    dropped: Vec<usize>,
 }
 
 impl<'a> Document<'a> {
@@ -28,14 +40,14 @@ impl<'a> Document<'a> {
         options.extension.table = true;
         let ast = parse_document(arena, &text, &options);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
-        let written_columns = Self::written_columns(ast, &lines, &text);
+        let unescaped_regions = Self::unescaped_regions(ast, &lines, &text);
 
         Ok(Self {
             path,
             ast,
             text,
             lines,
-            written_columns,
+            unescaped_regions,
         })
     }
 
@@ -68,65 +80,103 @@ impl<'a> Document<'a> {
         written
     }
 
+    /// The column as written, for one comrak reports on `line`.
+    ///
+    /// A column belongs to the last region that begins at or before it, and a
+    /// column past that region's content belongs to it all the same: the whole
+    /// of the region's shift applies there, which is what a column just past a
+    /// span at the end of a cell needs.
     fn written_column(&self, line: usize, column: usize) -> usize {
-        self.written_columns
-            .get(&line)
-            .and_then(|columns| columns.get(column))
-            .copied()
-            .unwrap_or(column)
+        let Some(regions) = self.unescaped_regions.get(&line) else {
+            return column;
+        };
+
+        let Some(region) = regions.iter().rev().find(|region| region.start <= column) else {
+            return column;
+        };
+
+        // Each column comrak dropped at or before where the column has reached
+        // is a byte it never reported, so the column moves one further right.
+        let mut written = column;
+        for &dropped in &region.dropped {
+            if dropped > written {
+                break;
+            }
+
+            written += 1;
+        }
+
+        written
     }
 
-    /// The column table [`Document::written_position`] reads, keyed by line.
+    /// The regions [`Document::written_position`] reads, keyed by line.
     ///
-    /// Only a line carrying a region that was written with a `\|` and unescaped
-    /// for it gets an entry; on every other line the two columns are equal, and
-    /// leaving those out keeps the table empty for the documents that have no
-    /// escape at all. Within an entry, index and value are the reported and the
-    /// written column, and an entry reaches as far as the last region it was
-    /// built from — a column past that is one nothing shifted, and reading past
-    /// the end is how [`Document::written_column`] answers for those.
-    fn written_columns(
+    /// Only a line that carries a region comrak dropped a byte from gets an
+    /// entry; on every other line the two columns are equal, and leaving those
+    /// out keeps this empty for the documents that have no escape at all. An
+    /// entry holds every region of its line in the order they were written, so
+    /// that a column can be answered for by the one it falls in rather than by
+    /// the one before it.
+    fn unescaped_regions(
         ast: &'a AstNode<'a>,
         lines: &[String],
         text: &str,
-    ) -> FxHashMap<usize, Vec<usize>> {
-        let mut written_columns = FxHashMap::default();
+    ) -> FxHashMap<usize, Vec<UnescapedRegion>> {
+        let mut unescaped_regions = FxHashMap::default();
 
         // Walking the tree costs more than the escape is common, and a document
         // written without one has no shifted column to correct.
         if !text.contains(r"\|") {
-            return written_columns;
+            return unescaped_regions;
         }
 
         for node in ast.descendants() {
             let position = node.data.borrow().sourcepos;
 
             match node.data.borrow().value {
-                // A cell's own `sourcepos` is built from the raw line rather
+                // A row is taken whole because its cells are unescaped one at a
+                // time: a cell after an escaped one is where the shift stops
+                // rather than carries on, and it can only say so by being here.
+                // The cells' own `sourcepos` is built from the raw line rather
                 // than from the unescaped content, so it is unshifted and gives
-                // the region to walk.
-                NodeValue::TableCell => Self::map_unescaped(
-                    &mut written_columns,
-                    lines,
-                    position.start.line,
-                    position.start.column,
-                    position.end.column,
-                ),
+                // each region's bounds.
+                NodeValue::TableRow(_) => {
+                    let cells: Vec<_> = node
+                        .children()
+                        .map(|cell| {
+                            let cell_position = cell.data.borrow().sourcepos;
+                            Self::unescaped_region(
+                                lines,
+                                cell_position.start.line,
+                                cell_position.start.column,
+                                cell_position.end.column,
+                            )
+                        })
+                        .collect();
+
+                    if cells.iter().any(|cell| !cell.dropped.is_empty()) {
+                        unescaped_regions.insert(position.start.line, cells);
+                    }
+                }
                 // The preface is unescaped as one string, but the inline parser
                 // measures each of its lines from that line's own offset, so
                 // each is shifted by the escapes written on it alone. A line of
                 // it is content and indentation and nothing else, and an escape
-                // cannot be in the indentation, so the whole of it is walked.
+                // cannot be in the indentation, so the whole of it is one
+                // region.
                 NodeValue::Paragraph if Self::is_table_preface(node) => {
                     for line in position.start.line..=position.end.line {
-                        Self::map_unescaped(&mut written_columns, lines, line, 1, usize::MAX);
+                        let region = Self::unescaped_region(lines, line, 1, usize::MAX);
+                        if !region.dropped.is_empty() {
+                            unescaped_regions.insert(line, vec![region]);
+                        }
                     }
                 }
                 _ => {}
             }
         }
 
-        written_columns
+        unescaped_regions
     }
 
     /// Whether this paragraph is the one comrak split off a table's header row.
@@ -147,80 +197,44 @@ impl<'a> Document<'a> {
             && next.data.borrow().sourcepos.start.line == node.data.borrow().sourcepos.end.line + 1
     }
 
-    /// Records where the columns of one unescaped region were written.
-    ///
-    /// The region is `line`'s bytes from `start` to `end`, both columns, with
-    /// `end` clamped to the line. A region comrak dropped nothing from is not
-    /// recorded: its columns are already the ones it was written with.
-    fn map_unescaped(
-        written_columns: &mut FxHashMap<usize, Vec<usize>>,
+    /// The region `line` holds from column `start` to column `end`, with `end`
+    /// clamped to the line.
+    fn unescaped_region(
         lines: &[String],
         line_number: usize,
         start: usize,
         end: usize,
-    ) {
+    ) -> UnescapedRegion {
         // A region's `sourcepos` names bytes of the line it was parsed from, so
         // the slice is there to take. One that somehow is not carries no escape
-        // either, and leaves with the regions written without one.
+        // either, and leaves as a region nothing was dropped from.
         let region = lines
             .get(line_number - 1)
             .and_then(|line| line.get(start - 1..end.min(line.len())))
             .unwrap_or_default();
 
-        let dropped = Self::dropped_columns(region, start);
-        if dropped.is_empty() {
-            return;
-        }
-
-        // Identity as far as this region reaches, for the columns before its
-        // first escape and for the regions on the line that had none.
-        let last = start + region.len() - 1;
-        let columns = written_columns.entry(line_number).or_default();
-        if columns.len() <= last {
-            let identity = columns.len()..=last;
-            columns.extend(identity);
-        }
-
-        let shift = dropped.len();
-        let mut dropped = dropped.into_iter().peekable();
-        let mut reported = start;
-        for written in start..=last {
-            // A dropped column is one comrak never reports, so it is passed
-            // over and every column after it in the region moves right by one.
-            if dropped.next_if_eq(&written).is_some() {
-                continue;
-            }
-
-            columns[reported] = written;
-            reported += 1;
-        }
-
-        // comrak reports one column fewer than the region was written with for
-        // each it dropped, so the columns at the region's end are left over.
-        // Those are where a rule's own arithmetic lands when it names the byte
-        // after the last one — an exclusive end — and past the region's content
-        // the whole of its shift applies.
-        for (offset, written) in columns[reported..=last].iter_mut().enumerate() {
-            *written = reported + offset + shift;
+        UnescapedRegion {
+            start,
+            dropped: Self::dropped_columns(region, start),
         }
     }
 
-    /// The columns of `cell`, which starts at column `start`, that comrak drops
-    /// before it parses the cell's inlines.
+    /// The columns of `region`, which starts at column `start`, that comrak
+    /// drops before it parses the inlines in it.
     ///
-    /// Those are the backslashes of the cell's `\|` escapes, and nothing else:
-    /// a table cell is unescaped for its pipes alone, and every other backslash
+    /// Those are the backslashes of the region's `\|` escapes, and nothing
+    /// else: it is unescaped for its pipes alone, and every other backslash
     /// reaches the inline parser, which records the columns it was written at.
     ///
     /// A backslash that is itself escaped does not start an escape, so the run
     /// is walked rather than the pairs matched: in `\\|` the second backslash
     /// is the first one's escape, and the pipe stands on its own. comrak leaves
     /// all three bytes where they were written, and so does this.
-    fn dropped_columns(cell: &str, start: usize) -> Vec<usize> {
+    fn dropped_columns(region: &str, start: usize) -> Vec<usize> {
         let mut dropped = vec![];
         let mut after_backslash = false;
 
-        for (offset, byte) in cell.bytes().enumerate() {
+        for (offset, byte) in region.bytes().enumerate() {
             if after_backslash {
                 if byte == b'|' {
                     dropped.push(start + offset - 1);
@@ -302,15 +316,16 @@ mod tests {
         let doc = Document::new(&arena, path, text)?;
 
         // `w` is at column 11, and comrak has it at 9 — one for each `\|`. The
-        // shift starts at the first escape, so the `x` before it and the `c` in
-        // the next cell, which was written without one, are where they say.
+        // shift starts at the first escape, so the row's opening delimiter, the
+        // `x` before that escape, and the `c` in the next cell, which was
+        // written without one, are all where they say.
         assert_eq!(
             doc.written_position(Sourcepos::from((3, 9, 3, 9))),
             Sourcepos::from((3, 11, 3, 11))
         );
         assert_eq!(
-            doc.written_position(Sourcepos::from((3, 3, 3, 3))),
-            Sourcepos::from((3, 3, 3, 3))
+            doc.written_position(Sourcepos::from((3, 1, 3, 3))),
+            Sourcepos::from((3, 1, 3, 3))
         );
         assert_eq!(
             doc.written_position(Sourcepos::from((3, 15, 3, 15))),
@@ -348,9 +363,10 @@ mod tests {
     }
 
     // A cell reports one column fewer than it was written with for each escape
-    // in it, so its last written columns are ones no inline starts at. A rule
-    // still names them when it counts an exclusive end off a span that runs to
-    // the cell's end, and the cell's whole shift applies to those.
+    // in it, so the columns at its end are ones comrak never reports from
+    // inside it. A region reaches to where the next one begins rather than to
+    // where its content stops, so those still answer with its shift instead of
+    // falling back on themselves.
     #[test]
     fn written_position_past_a_cell() -> Result<()> {
         let text = indoc! {r"

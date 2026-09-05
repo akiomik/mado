@@ -49,11 +49,19 @@ impl RuleLike for MD034 {
 
                     // NOTE: link.start and link.end start from 0
                     let mut position = node.data.borrow().sourcepos;
-                    position.end = position.start.column_add(link.end() as isize);
+                    // The URL's last byte rather than the one after it, which
+                    // is the column reported. A column is put back on the line
+                    // by the character comrak reports at it, and the byte after
+                    // the URL is not the URL's: a `\|` written there would be
+                    // unescaped, and the end would follow it past the URL.
+                    position.end = position.start.column_add(link.end() as isize - 1);
                     position.start = position.start.column_add(link.start() as isize);
 
-                    let violation =
-                        self.to_violation(doc.path.clone(), doc.written_position(position));
+                    // Back to the byte after the URL, in the line's own columns.
+                    position = doc.written_position(position);
+                    position.end = position.end.column_add(1);
+
+                    let violation = self.to_violation(doc.path.clone(), position);
                     violations.push(violation);
                 }
             }
@@ -168,6 +176,27 @@ mod tests {
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((3, 7, 3, 30)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The column the rule names is the byte after the URL, and here that byte
+    // is the backslash of an escape comrak unescaped. Reading it as the URL's
+    // own would carry the end past the escape along with it.
+    #[test]
+    fn check_errors_with_escaped_pipe_after_url_in_table_cell() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x http://www.example.com/\|y |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 5, 3, 28)))];
         assert_eq!(actual, expected);
         Ok(())
     }
