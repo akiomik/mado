@@ -41,6 +41,16 @@ parsed and therefore what gets reported.
   the same line above a table's header row, moved an inline's reported column
   one to the left of the character it named, and one more for each further
   escape (#405)
+- MD034 and MD037: report the column an inline was written at, rather than one
+  counted off a string `CommonMark` had already resolved the escapes out of. A
+  `\.` written earlier in the same text node moved the reported column one to
+  the left of the character it named, and one more for each further escape
+  (#407)
+- MD037: an escaped `*` or `_` is no longer read as an emphasis marker, so a
+  line whose only emphasis is the one its author escaped to keep is left alone,
+  and a line that has emphasis besides is reported at it (#407)
+- MD037: report the marker after a tab, or after any other whitespace, rather
+  than the whitespace itself (#407)
 
 ## [0.3.1] - 2026-07-22
 
