@@ -221,10 +221,14 @@ mod tests {
         Ok(())
     }
 
-    // Nothing but spaces is left alone by `CommonMark`, so every one of them is
-    // visible padding: the span renders as a space and reads as an empty one.
-    // Reporting it is deliberate — a span with nothing else in it is a space the
-    // author can see and remove.
+    // Nothing but spaces is left alone by `CommonMark`, so nothing is removed and
+    // every space is as written.
+    //
+    // NOTE: this sits awkwardly beside the backtick case above. A span of one
+    // space is the only way to write a code span that renders as one, so the
+    // report cannot be acted on without deleting the span — the shape this rule
+    // was fixed for. It is reported anyway, because that is what mado has always
+    // done here and narrowing it is a decision of its own, not a bug fix.
     #[test]
     fn check_errors_with_only_spaces() -> Result<()> {
         let text = "` `".to_owned();
@@ -324,6 +328,11 @@ mod tests {
     // comrak unescapes a table cell before parsing its inlines, so `sourcepos`
     // no longer indexes the line the cell was written on. Widths survive that;
     // both spans here are measured, not sliced.
+    //
+    // NOTE: the column asserted here is one to the left of the backtick it names
+    // — one for the single `\|` before it — and is what mado reports today
+    // rather than what it should. The shift is in the position comrak records,
+    // not in this rule, and reaches every inline it forwards; #403 tracks it.
     #[test]
     fn check_errors_with_escaped_pipe_in_table() -> Result<()> {
         let text = indoc! {r"
@@ -345,7 +354,8 @@ mod tests {
 
     // A span that crosses a line ending is not judged, so padding written against
     // one of its delimiters is missed. That is the accepted cost of not reporting
-    // the three shapes below, none of which its author could act on.
+    // the three shapes below, none of which its author could act on. #404 covers
+    // the part of this that `literal` can still prove on its own.
     #[test]
     fn check_no_errors_with_padded_multiline_code_span() -> Result<()> {
         let text = indoc! {"
