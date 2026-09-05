@@ -61,6 +61,12 @@ impl RuleLike for MD037 {
 
             let mut position = data.sourcepos;
 
+            // The offsets are counted off one line, so the span is that line's.
+            // comrak ends a text node on another only where the position is one
+            // `written_text_without_escapes` cannot read the line for, and the
+            // offsets are the start line's there too.
+            position.end.line = position.start.line;
+
             // NOTE: m.start and m.end start from 0, and count off `column`,
             //       which is where the text starts on the line.
             if m.as_str().starts_with(' ') {

@@ -51,15 +51,22 @@ impl RuleLike for MD034 {
 
             // The line the node was written on rather than its literal, whose
             // offsets stop naming columns as soon as an escape is resolved out
-            // of it. A URL written with an escape in it is bounded where the
-            // line bounds it, backslash and all, which is where GFM bounds the
-            // link it autolinks out of one.
+            // of it. The backslash of an escape is on the line and belongs
+            // there: GFM reads one written into a URL as the URL's own rather
+            // than as an escape, and a URL whose scheme carries one it does not
+            // autolink at all.
             let (text, column) = doc.written_text(data.sourcepos, literal);
 
             for link in finder.links(text) {
                 // NOTE: link.start and link.end start from 0, and count off
                 //       `column`, which is where the text starts on the line.
                 let mut position = data.sourcepos;
+
+                // The offsets are counted off one line, so the span is that
+                // line's. comrak ends a text node on another only where the
+                // position is one `written_text` cannot read the line for, and
+                // the offsets are the start line's there too.
+                position.end.line = position.start.line;
                 position.start.column = column + link.start();
 
                 // The byte after the URL's last, which is the column reported.
@@ -184,9 +191,10 @@ mod tests {
     }
 
     // A backslash directly after a URL is a byte of the line like any other,
-    // and the URL scanner reads it as the URL's own — which is what GFM does
-    // with it too, autolinking `http://www.example.com/\` here. The column
-    // reported is the byte after that.
+    // and the URL scanner reads it as the URL's own rather than stopping at it.
+    // The column reported is the byte after the last one that scanner took,
+    // which is its own boundary and not GFM's: GFM unescapes the cell first and
+    // autolinks on through the `|y`.
     #[test]
     fn check_errors_with_escaped_pipe_after_url_in_table_cell() -> Result<()> {
         let text = indoc! {r"
