@@ -43,19 +43,23 @@ impl MD038 {
     /// of everything after it by a byte. A width survives that — both ends shift
     /// together — where a slice of `doc.lines` would read the wrong text.
     ///
-    /// `None` means the width and `literal` disagree by an amount `CommonMark`
-    /// has no rule for, and the caller then skips the span: a span we cannot
-    /// account for is not evidence of a violation.
+    /// `None` means the columns do not describe a span at all, and the caller
+    /// then skips it: a position we cannot measure is not evidence of a
+    /// violation.
     fn same_line_content(code: &NodeCode, position: Sourcepos) -> Option<Cow<'_, str>> {
         let width = (position.end.column + 1)
             .checked_sub(position.start.column)?
             .checked_sub(2 * code.num_backticks)?;
 
-        match width.checked_sub(code.literal.len())? {
-            0 => Some(Cow::Borrowed(&code.literal)),
-            2 => Some(Cow::Owned(format!(" {} ", code.literal))),
-            _ => None,
+        // `CommonMark` takes a space off each end or nothing at all, so the width
+        // tells those two apart on its own. A width it cannot have produced is
+        // not a third case to reject: `literal` is then judged as it stands,
+        // which reports what a reader can see and nothing else.
+        if width == code.literal.len() + 2 {
+            return Some(Cow::Owned(format!(" {} ", code.literal)));
         }
+
+        Some(Cow::Borrowed(&code.literal))
     }
 
     /// The same text for a span whose delimiters sit on different lines.
