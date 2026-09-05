@@ -103,6 +103,13 @@ impl MD038 {
     /// be padded at *both* ends, because the removal happens only when both are
     /// there. ``` `` ` `` ``` is how `CommonMark` spells a literal backtick, and
     /// reporting it would leave no way to author one at all.
+    ///
+    /// The exception is the removal, not the backtick. A space that survives it
+    /// is in the output, and being next to a backtick does not make it any less
+    /// visible: ``` `` ` a`` ``` renders as `` ` a`` with the space, because the
+    /// other end has none for `CommonMark` to pair it with. That is reported,
+    /// and the fix is to give it one — ``` `` ` a `` ``` renders as `` `a`` —
+    /// rather than to delete a space the span cannot be written without.
     fn is_padded(content: &str) -> bool {
         let stripped = Self::strip_padding(content);
         let visible = stripped.unwrap_or(content);
@@ -193,6 +200,33 @@ mod tests {
         let expected = vec![
             rule.to_violation(path.clone(), Sourcepos::from((1, 1, 1, 17))),
             rule.to_violation(path, Sourcepos::from((3, 1, 3, 16))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // Only the removed pair is invisible. A space against a backtick that
+    // `CommonMark` leaves alone is in the output, and reporting it is actionable:
+    // the third span here is the first two with the missing space supplied, and
+    // it renders without either.
+    #[test]
+    fn check_errors_with_unbalanced_backtick_content() -> Result<()> {
+        let text = indoc! {"
+            `` ` embedded``
+
+            ``embedded ` ``
+
+            `` ` embedded ` ``
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 1, 15))),
+            rule.to_violation(path, Sourcepos::from((3, 1, 3, 15))),
         ];
         assert_eq!(actual, expected);
         Ok(())
