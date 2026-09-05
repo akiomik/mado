@@ -184,11 +184,38 @@ just test
 just lint
 ```
 
+### Acceptance Testing
+
+Compares what mado and [`mdl`](https://github.com/markdownlint/markdownlint)
+report for markdownlint's own rule fixtures. This needs `mdl`, `cargo` and
+`git` on `PATH`.
+
+```bash
+# Download the fixtures and set aside the ones written against their own style
+./scripts/acceptance/setup.sh
+
+# Write each tool's findings to tmp/mdl.txt and tmp/mado.txt
+./scripts/acceptance/test.sh
+
+diff tmp/mdl.txt tmp/mado.txt
+```
+
+That diff is not expected to be empty. Some of it is the two tools disagreeing
+and some of it is the two configurations differing, which is being worked out
+in [#401](https://github.com/akiomik/mado/issues/401).
+
 ### Benchmarking
+
+This needs [`hyperfine`](https://github.com/sharkdp/hyperfine),
+[`mdl`](https://github.com/markdownlint/markdownlint), `node`, `npm`, `cargo`
+and `git` on `PATH`.
 
 ```bash
 # Download Markdown dataset
 ./scripts/benchmarks/setup.sh
+
+# Install the markdownlint commands the comparison runs against
+npm --prefix scripts/benchmarks ci
 
 # Benchmark mado, mdl and markdownlint-cli using hyperfine
 ./scripts/benchmarks/comparison.sh
