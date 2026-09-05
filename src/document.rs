@@ -80,7 +80,9 @@ impl<'a> Document<'a> {
     /// entry; on every other line the two columns are equal, and leaving those
     /// out keeps the table empty for the documents that have no escape at all.
     /// Within an entry, index and value are the reported and the written
-    /// column, and the columns outside the affected cells map to themselves.
+    /// column, and an entry reaches as far as the last cell it was built from —
+    /// a column past its end is one nothing shifted, and reading past the end
+    /// is how [`Document::written_column`] answers for those.
     ///
     /// A cell's own `sourcepos` is built from the raw line rather than from the
     /// unescaped content, so it is unshifted and gives the region to walk.
@@ -103,30 +105,30 @@ impl<'a> Document<'a> {
             }
 
             let position = node.data.borrow().sourcepos;
-            let Some(line) = position
-                .start
-                .line
-                .checked_sub(1)
-                .and_then(|index| lines.get(index))
-            else {
-                continue;
-            };
-
-            let length = line.len();
             let start = position.start.column;
-            let end = position.end.column.min(length);
-            let Some(cell) = start.checked_sub(1).and_then(|index| line.get(index..end)) else {
-                continue;
-            };
+
+            // A cell's `sourcepos` names bytes of the line it was parsed from,
+            // so the slice is there to take. One that somehow is not carries no
+            // escape either, and leaves with the cells that were written
+            // without one.
+            let cell = lines
+                .get(position.start.line - 1)
+                .and_then(|line| line.get(start - 1..position.end.column.min(line.len())))
+                .unwrap_or_default();
 
             let dropped = Self::dropped_columns(cell, start);
             if dropped.is_empty() {
                 continue;
             }
 
-            let columns = written_columns
-                .entry(position.start.line)
-                .or_insert_with(|| (0..=length + 1).collect::<Vec<_>>());
+            // Identity as far as this cell reaches, for the columns before its
+            // first escape and for the cells on the line that had none.
+            let end = start + cell.len() - 1;
+            let columns = written_columns.entry(position.start.line).or_default();
+            if columns.len() <= end {
+                let identity = columns.len()..=end;
+                columns.extend(identity);
+            }
 
             let mut dropped = dropped.into_iter().peekable();
             let mut reported = start;
@@ -137,10 +139,7 @@ impl<'a> Document<'a> {
                     continue;
                 }
 
-                if let Some(column) = columns.get_mut(reported) {
-                    *column = written;
-                }
-
+                columns[reported] = written;
                 reported += 1;
             }
         }
@@ -258,6 +257,34 @@ mod tests {
         assert_eq!(
             doc.written_position(Sourcepos::from((3, 15, 3, 15))),
             Sourcepos::from((3, 15, 3, 15))
+        );
+        Ok(())
+    }
+
+    // Each cell is unescaped on its own, so the shift restarts at every one and
+    // the table has to reach past the first to carry the second.
+    #[test]
+    fn written_position_in_two_table_cells() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\|y w | c\|d v |
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+
+        // `w` is at column 8 and `v` at column 17, each one to the right of
+        // where comrak has it — the second because of its own cell's escape,
+        // not because the first cell's is still being counted.
+        assert_eq!(
+            doc.written_position(Sourcepos::from((3, 7, 3, 7))),
+            Sourcepos::from((3, 8, 3, 8))
+        );
+        assert_eq!(
+            doc.written_position(Sourcepos::from((3, 16, 3, 16))),
+            Sourcepos::from((3, 17, 3, 17))
         );
         Ok(())
     }
