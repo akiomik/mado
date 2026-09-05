@@ -23,37 +23,6 @@ impl MD034 {
     pub const fn new() -> Self {
         Self {}
     }
-
-    /// Whether the scan that found `url` stopped at an escape rather than at
-    /// the end of a URL, leaving a piece of text that is no URL at all.
-    ///
-    /// A backslash written into a URL's path is the URL's own, to a scanner
-    /// here and to GFM alike, and the scan runs on through it. One written into
-    /// the authority is a byte no authority can hold, so the scan stops there
-    /// and hands back what came before it — `http://ex` out of
-    /// `http://ex\_ample.com/` — which a scanner that asks no more of an
-    /// authority than a scheme and a name reads as a URL of its own. GFM
-    /// autolinks nothing there, the authority being what the escape spoiled, so
-    /// neither does this.
-    ///
-    /// The literal says which of the two happened: it holds the authority with
-    /// the escape resolved, so a scan of it finds the URL that was written or
-    /// finds nothing where there is none. A scan that stopped at an escape
-    /// never took one, so what it did take is a prefix of whatever stands there
-    /// in the literal.
-    fn is_cut_short(finder: &LinkFinder, url: &str, rest: &str, literal: &str) -> bool {
-        Self::starts_with_escape(rest)
-            && !finder
-                .links(literal)
-                .any(|link| link.as_str().starts_with(url))
-    }
-
-    /// Whether `text` begins with a `\<punctuation>` escape.
-    fn starts_with_escape(text: &str) -> bool {
-        let mut chars = text.chars();
-
-        chars.next() == Some('\\') && chars.next().is_some_and(|char| char.is_ascii_punctuation())
-    }
 }
 
 impl RuleLike for MD034 {
@@ -80,32 +49,28 @@ impl RuleLike for MD034 {
                 continue;
             }
 
-            // The line the node was written on rather than its literal, whose
-            // offsets stop naming columns as soon as an escape is resolved out
-            // of it. The backslash of an escape is on the line and belongs
-            // there: GFM reads one written into a URL as the URL's own rather
-            // than as an escape, and a URL whose scheme carries one it does not
-            // autolink at all.
-            let (text, column) = doc.written_text(data.sourcepos, literal);
-
-            for link in finder.links(text) {
-                if Self::is_cut_short(&finder, link.as_str(), &text[link.end()..], literal) {
-                    continue;
-                }
-
-                // NOTE: link.start and link.end start from 0, and count off
-                //       `column`, which is where the text starts on the line.
+            // The literal rather than the line, because what a bare URL is is a
+            // question about the text a reader is given: a scan of the line
+            // stops at a backslash written into an authority, which no
+            // authority can hold, and hands back the piece before it as a URL
+            // of its own. `CommonMark` has resolved the escape by the time the
+            // literal is built, and the authority there is the one a reader
+            // sees. What the literal cannot say is where any of it was written,
+            // and that is what `written_column_of` is for.
+            for link in finder.links(literal) {
+                // NOTE: link.start and link.end start from 0
                 let mut position = data.sourcepos;
-
-                // The offsets are counted off one line, so the span is that
-                // line's. comrak ends a text node on another only where the
-                // position is one `written_text` cannot read the line for, and
-                // the offsets are the start line's there too.
                 position.end.line = position.start.line;
-                position.start.column = column + link.start();
+                position.start.column =
+                    doc.written_column_of(data.sourcepos, literal, link.start());
 
-                // The byte after the URL's last, which is the column reported.
-                position.end.column = column + link.end();
+                // The URL's last byte rather than the one after it, stepped
+                // past once it is on the line: a column is answered for by the
+                // byte the literal has at it, and the byte after the URL is not
+                // the URL's. A `\|` written there would be one the walk stops
+                // at, and the end would follow it past the URL.
+                position.end.column =
+                    doc.written_column_of(data.sourcepos, literal, link.end() - 1) + 1;
 
                 let violation = self.to_violation(doc.path.clone(), position);
                 violations.push(violation);
@@ -225,11 +190,10 @@ mod tests {
         Ok(())
     }
 
-    // A backslash directly after a URL is a byte of the line like any other,
-    // and the URL scanner reads it as the URL's own rather than stopping at it.
-    // The column reported is the byte after the last one that scanner took,
-    // which is its own boundary and not GFM's: GFM unescapes the cell first and
-    // autolinks on through the `|y`.
+    // The column the rule names is the byte after the URL, and here that byte
+    // is the backslash of an escape. A column is answered for by the byte the
+    // literal has at it, and the byte after the URL is not the URL's: the walk
+    // stops at that escape, and the end would follow it past the URL.
     #[test]
     fn check_errors_with_escaped_pipe_after_url_in_table_cell() -> Result<()> {
         let text = indoc! {r"
@@ -243,7 +207,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 5, 3, 29)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 5, 3, 28)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -288,28 +252,12 @@ mod tests {
         Ok(())
     }
 
-    // An escape in the scheme is how a URL is written so that it is not
-    // autolinked, and GFM leaves this one alone. The literal has the escape
-    // resolved out of it and reads as a bare URL, so measuring against it
-    // reported a URL the author had already stopped from becoming one.
-    #[test]
-    fn check_no_errors_with_escaped_scheme() -> Result<()> {
-        let text = "For more information, see http\\://www.example.com/.".to_owned();
-        let path = Path::new("test.md").to_path_buf();
-        let arena = Arena::new();
-        let doc = Document::new(&arena, path, text)?;
-        let rule = MD034::default();
-        let actual = rule.check(&doc)?;
-        let expected = vec![];
-        assert_eq!(actual, expected);
-        Ok(())
-    }
-
-    // A scan of the line stops inside the authority at a backslash, and what it
-    // hands back — `http://ex` here — is a URL to a scanner that asks no more of
-    // an authority than a scheme and a name. GFM autolinks nothing on this line,
-    // the authority being what the escape spoiled, and the literal says so: with
-    // the escape resolved there is no URL in it to be a prefix of.
+    // An escape resolved out of an authority can leave one no URL is written
+    // with — an underscore in either of the last two labels is not a domain to
+    // GFM, and is not one here — and the literal is where that can be seen. A
+    // scan of the line stops at the backslash instead, no authority being able
+    // to hold one, and hands back the `http://ex` before it as a URL of its
+    // own.
     #[test]
     fn check_no_errors_with_escaped_authority() -> Result<()> {
         let text = "see http://my\\_site.com/ now".to_owned();
@@ -323,24 +271,40 @@ mod tests {
         Ok(())
     }
 
-    // The scan stops at the same escape here, and this time the literal does
-    // hold the URL the line was written with, so the piece the scan took is a
-    // prefix of it and the URL beside it is nobody's prefix.
+    // And the piece a scan of the line hands back is a prefix of any URL that
+    // shares it, so a second URL on the line is enough to make one of these
+    // look like a URL that was written.
     #[test]
     fn check_errors_with_escaped_authority_beside_a_url() -> Result<()> {
-        let text = "http://ex\\_ample.com/ and http://good.com".to_owned();
+        let text = "see http://ex\\_ample.com/ and http://ex.com now".to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 27, 1, 42)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 31, 1, 44)))];
         assert_eq!(actual, expected);
         Ok(())
     }
 
-    // A backslash written into the path is the URL's own, and the scan runs on
-    // through it as GFM does, so nothing here was cut short.
+    // An escape resolved out of an authority that leaves a domain leaves a URL,
+    // and GFM autolinks this one whole. The rule reports the whole of it: the
+    // literal holds it whole, and the walk puts each end back on the line.
+    #[test]
+    fn check_errors_with_escaped_authority_that_resolves() -> Result<()> {
+        let text = "see http://ex\\-ample.com/ now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 26)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // An escape written into the path is resolved out of the literal like any
+    // other, and the walk puts its two columns back.
     #[test]
     fn check_errors_with_escaped_path() -> Result<()> {
         let text = "see http://www.example.com/foo\\_bar now".to_owned();

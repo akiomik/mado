@@ -73,12 +73,19 @@ impl RuleLike for MD037 {
             // The alternatives that begin at a start marker begin at the
             // whitespace before it, and the ones that begin at an end marker
             // begin at the marker, so what the match begins with says which
-            // matched. Asked about a space alone, a tab written before a marker
-            // answered for the end-marker arithmetic and put the report on the
-            // tab rather than on the marker after it.
-            if m.as_str().starts_with(char::is_whitespace) {
+            // matched. `\s` is any whitespace and not the space alone, so it is
+            // asked about as such — a tab answered for the end-marker
+            // arithmetic and put the report on the tab rather than on the
+            // marker — and the marker is that character's width along, which is
+            // two bytes for a no-break space and three for an ideographic one.
+            if let Some(space) = m
+                .as_str()
+                .chars()
+                .next()
+                .filter(|char| char.is_whitespace())
+            {
                 // When a start marker matches
-                position.start.column = column + m.start() + 1;
+                position.start.column = column + m.start() + space.len_utf8();
                 position.end.column = column + m.end() - 1;
             } else {
                 // When an end marker matches
@@ -388,6 +395,23 @@ mod tests {
         let rule = MD037::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((1, 3, 1, 9)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // `\s` is whatever is whitespace and not what is one byte of it, so the
+    // marker is that character's width along rather than one: a no-break space
+    // is two bytes, and a column one past its first is inside it and not a
+    // column of the line at all.
+    #[test]
+    fn check_errors_with_multibyte_space_before_marker() -> Result<()> {
+        let text = "x\u{a0}** b ** y".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 4, 1, 10)))];
         assert_eq!(actual, expected);
         Ok(())
     }
