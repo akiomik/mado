@@ -30,6 +30,12 @@ parsed and therefore what gets reported.
 - The GitHub Action downloads the `arm64` release asset on arm64 Linux runners,
   where it previously asked for an `aarch64` one that no release publishes and
   failed (#395)
+- MD038: measure a code span against its own delimiter rather than a
+  one-backtick one, so spans delimited by two or more backticks — the only way
+  to write a span containing a backtick — are no longer reported when they hold
+  no padding. A span whose delimiters sit on different lines is left unjudged
+  rather than reported, since nothing recorded about it describes what was
+  written against those delimiters (#391)
 
 ## [0.3.1] - 2026-07-22
 
