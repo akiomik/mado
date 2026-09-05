@@ -48,6 +48,10 @@ impl RuleLike for MD037 {
             if let NodeValue::Text(text) = &node.data.borrow().value
                 && let Some(m) = RE.find(text)
             {
+                // The match indexes `text`, where a backslash escape has already
+                // been resolved, so its offsets only name columns while that and
+                // the line are the same length — and an escaped marker reaches
+                // the regex as a bare one. #406 covers both.
                 let mut position = node.data.borrow().sourcepos;
 
                 if m.as_str().starts_with(' ') {

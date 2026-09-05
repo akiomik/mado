@@ -48,6 +48,10 @@ impl RuleLike for MD034 {
                     }
 
                     // NOTE: link.start and link.end start from 0
+                    //
+                    // These index `text`, where a backslash escape has already
+                    // been resolved, so they only name columns while it and the
+                    // line are the same length. #406 covers the rest.
                     let mut position = node.data.borrow().sourcepos;
                     // The URL's last byte rather than the one after it, which
                     // is the column reported. A column is put back on the line

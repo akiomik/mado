@@ -68,9 +68,19 @@ impl<'a> Document<'a> {
     /// column names the character a reader sees at it.
     ///
     /// The paragraph comrak splits off a table's header row is unescaped the
-    /// same way, and is corrected the same way. A position from anywhere else
-    /// is returned unchanged, and so is one outside the region it names — a
-    /// rule that has done its own column arithmetic can hand over either.
+    /// same way, and is corrected the same way. A position on a line that
+    /// carries neither, or before the first region on a line that does, is
+    /// returned unchanged.
+    ///
+    /// The pipe is the only escape this knows about, and it is the only one
+    /// comrak resolves before it measures: a column that a `\<punctuation>`
+    /// escape put wrong was never shifted by comrak and cannot be found from
+    /// here. #406 covers those.
+    ///
+    /// A column is put back on the line by the character comrak reports at it,
+    /// so a caller whose own arithmetic named the byte *after* a span — an
+    /// exclusive end — has to hand over the span's last byte and step past the
+    /// column that comes back, rather than hand over the byte after it.
     #[inline]
     #[must_use]
     pub fn written_position(&self, position: Sourcepos) -> Sourcepos {
@@ -82,10 +92,11 @@ impl<'a> Document<'a> {
 
     /// The column as written, for one comrak reports on `line`.
     ///
-    /// A column belongs to the last region that begins at or before it, and a
-    /// column past that region's content belongs to it all the same: the whole
-    /// of the region's shift applies there, which is what a column just past a
-    /// span at the end of a cell needs.
+    /// A column belongs to the last region that begins at or before it. A
+    /// region reaches to where the next one begins rather than to where its
+    /// content stops, so the columns between the two carry its shift as well —
+    /// comrak reports none of them, and answering with the shift keeps a column
+    /// at the end of a cell next to the one before it instead of jumping back.
     fn written_column(&self, line: usize, column: usize) -> usize {
         let Some(regions) = self.unescaped_regions.get(&line) else {
             return column;
