@@ -30,6 +30,19 @@ impl MD038 {
     /// The text between a code span's delimiters, as it was written, before
     /// `CommonMark` removed any padding from it.
     ///
+    /// Only a span whose delimiters share a line has one. A span that crosses a
+    /// line ending is skipped, and deliberately: nothing available describes its
+    /// content. `literal` has already turned the line endings into spaces and
+    /// taken the padding off, a width cannot be had from columns that index two
+    /// different lines, and reading the lines back fails four ways that were all
+    /// found in real documents — the columns shift once a continuation line is
+    /// stripped of its indentation, the lines between the delimiters are not part
+    /// of any slice of the two ends, a container's `>` or list marker lands
+    /// inside the slice, and a span whose ends are both empty rebuilds as a
+    /// single space that reads as padding. Reporting under any of those is a
+    /// violation its author cannot act on, which is the defect this rule was
+    /// fixed for, so the span goes unjudged instead.
+    ///
     /// `code.literal` is that text after the removal, so on its own it cannot
     /// say whether anything was taken off. What says so is how wide the span is:
     /// `sourcepos` covers the delimiters, and comrak carries `num_backticks`, so
@@ -46,7 +59,11 @@ impl MD038 {
     /// `None` means the columns do not describe a span at all, and the caller
     /// then skips it: a position we cannot measure is not evidence of a
     /// violation.
-    fn same_line_content(code: &NodeCode, position: Sourcepos) -> Option<Cow<'_, str>> {
+    fn content(code: &NodeCode, position: Sourcepos) -> Option<Cow<'_, str>> {
+        if position.start.line != position.end.line {
+            return None;
+        }
+
         let width = (position.end.column + 1)
             .checked_sub(position.start.column)?
             .checked_sub(2 * code.num_backticks)?;
@@ -60,45 +77,6 @@ impl MD038 {
         }
 
         Some(Cow::Borrowed(&code.literal))
-    }
-
-    /// The same text for a span whose delimiters sit on different lines.
-    ///
-    /// A width cannot be had here — the two columns index different lines — and
-    /// `literal` has already turned each line ending into a space, so neither
-    /// says what was written against the delimiters. The lines do, when they can
-    /// be trusted, and a table cell cannot reach this far: a row ends at its line
-    /// ending, so a span that crosses one is never inside a cell.
-    ///
-    /// Trust has to be earned rather than assumed. comrak measures an inline
-    /// against the paragraph's content, not against the file, and the two part
-    /// company once a continuation line has been stripped of its indentation. In
-    /// the GitLab corpus under `scripts/benchmarks/data`,
-    /// `doc/migrate_ci_to_ce/README.md:134` lands two columns past its own
-    /// closing delimiter. So the delimiters are looked for where `sourcepos`
-    /// claims they are, and `None` says they were not there.
-    ///
-    /// Only the two ends are read back. What lies between them cannot make the
-    /// content all spaces, because a blank line would have ended the paragraph
-    /// rather than the code span, so the joined ends stand in for the whole.
-    fn multi_line_content(
-        lines: &[String],
-        position: Sourcepos,
-        num_backticks: usize,
-    ) -> Option<String> {
-        let delimiter = "`".repeat(num_backticks);
-        let opened = lines
-            .get(position.start.line.checked_sub(1)?)?
-            .get(position.start.column.checked_sub(1)?..)?
-            .strip_prefix(&delimiter)?;
-        let closed = lines
-            .get(position.end.line.checked_sub(1)?)?
-            .get(..position.end.column)?
-            .strip_suffix(&delimiter)?;
-
-        // The line ending between them is a space, and so is every one the lines
-        // in between contribute.
-        Some(format!("{opened} {closed}"))
     }
 
     /// The content as a reader sees it, or `None` when `CommonMark` leaves it
@@ -150,13 +128,7 @@ impl RuleLike for MD038 {
         for node in doc.ast.descendants() {
             if let NodeValue::Code(code) = &node.data.borrow().value {
                 let position = node.data.borrow().sourcepos;
-                let maybe_content = if position.start.line == position.end.line {
-                    Self::same_line_content(code, position)
-                } else {
-                    Self::multi_line_content(&doc.lines, position, code.num_backticks)
-                        .map(Cow::Owned)
-                };
-                let Some(content) = maybe_content else {
+                let Some(content) = Self::content(code, position) else {
                     continue;
                 };
 
@@ -321,23 +293,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn check_no_errors_with_multiline_code_span() -> Result<()> {
-        let text = indoc! {"
-            `some
-            text`
-        "}
-        .to_owned();
-        let path = Path::new("test.md").to_path_buf();
-        let arena = Arena::new();
-        let doc = Document::new(&arena, path, text)?;
-        let rule = MD038::new();
-        let actual = rule.check(&doc)?;
-        let expected = vec![];
-        assert_eq!(actual, expected);
-        Ok(())
-    }
-
     // A multibyte prefix moves the span's columns without changing its width, so
     // it has to be reported at the columns the multibyte text puts it at.
     #[test]
@@ -388,11 +343,70 @@ mod tests {
         Ok(())
     }
 
+    // A span that crosses a line ending is not judged, so padding written against
+    // one of its delimiters is missed. That is the accepted cost of not reporting
+    // the three shapes below, none of which its author could act on.
+    #[test]
+    fn check_no_errors_with_padded_multiline_code_span() -> Result<()> {
+        let text = indoc! {"
+            ` some
+            text `
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The content lives on the line between the delimiters, which no slice of
+    // the two end lines contains. Both ends are empty here, and a reconstruction
+    // from them alone is a single space that reads as padding — on a span whose
+    // spaces are the only way to write it.
+    #[test]
+    fn check_no_errors_with_multiline_code_span_around_content() -> Result<()> {
+        let text = indoc! {"
+            ``
+            `x`
+            ``
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A blockquote's `>` sits between the start of the line and the closing
+    // delimiter, so it lands inside any slice taken up to that column.
+    #[test]
+    fn check_no_errors_with_multiline_code_span_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > `text
+            >`
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // comrak measures an inline against the paragraph's content rather than the
     // file, so once a continuation line has been stripped of its indentation the
-    // columns no longer index the line. The delimiters are not where `sourcepos`
-    // says they are, and the span goes unchecked rather than being read out of
-    // the wrong place — a miss, never a report the author cannot act on.
+    // columns no longer index the line they are supposed to.
     #[test]
     fn check_no_errors_with_multiline_code_span_after_indentation() -> Result<()> {
         let text = indoc! {"
@@ -407,25 +421,6 @@ mod tests {
         let rule = MD038::new();
         let actual = rule.check(&doc)?;
         let expected = vec![];
-        assert_eq!(actual, expected);
-        Ok(())
-    }
-
-    // A line ending inside a code span becomes a space, so padding written
-    // against a delimiter is as invisible here as it is on one line.
-    #[test]
-    fn check_errors_with_multiline_code_span() -> Result<()> {
-        let text = indoc! {"
-            ` some
-            text `
-        "}
-        .to_owned();
-        let path = Path::new("test.md").to_path_buf();
-        let arena = Arena::new();
-        let doc = Document::new(&arena, path.clone(), text)?;
-        let rule = MD038::new();
-        let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 1, 2, 6)))];
         assert_eq!(actual, expected);
         Ok(())
     }
