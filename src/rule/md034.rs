@@ -151,4 +151,24 @@ mod tests {
         assert_eq!(actual, expected);
         Ok(())
     }
+
+    // The rule names the byte after the URL's last, and a URL that runs to the
+    // end of its cell puts that past the columns comrak reports for the cell.
+    #[test]
+    fn check_errors_with_escaped_pipe_at_end_of_table_cell() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            |x\|y http://www.example.com/| c |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 7, 3, 30)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
 }

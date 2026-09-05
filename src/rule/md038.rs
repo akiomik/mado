@@ -493,4 +493,25 @@ mod tests {
         assert_eq!(actual, expected);
         Ok(())
     }
+
+    // comrak unescapes the paragraph it splits off a table's header row too, so
+    // a span written above a table is shifted like one written in it.
+    #[test]
+    fn check_errors_with_escaped_pipe_in_table_header_preface() -> Result<()> {
+        let text = indoc! {r"
+            text x\|y `` some text `` here
+            | a | b |
+            | --- | --- |
+            | c | d |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 11, 1, 25)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
 }

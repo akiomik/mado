@@ -82,10 +82,9 @@ impl RuleLike for MD033 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            let position = doc.written_position(node.data.borrow().sourcepos);
-
             match &node.data.borrow().value {
                 NodeValue::HtmlInline(html) => {
+                    let position = doc.written_position(node.data.borrow().sourcepos);
                     self.check_html(html, &doc.path, &position, &mut violations);
                 }
                 NodeValue::HtmlBlock(html) => {
@@ -95,6 +94,7 @@ impl RuleLike for MD033 {
                         continue;
                     }
 
+                    let position = doc.written_position(node.data.borrow().sourcepos);
                     self.check_html(&html.literal, &doc.path, &position, &mut violations);
                 }
                 _ => {}
