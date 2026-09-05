@@ -117,8 +117,8 @@ impl<'a> Document<'a> {
     /// what this does are the two halves of one report: the position of the
     /// node, and the offsets counted off inside it.
     ///
-    /// Where the line is not the literal's source, [`Document::line_text`] says
-    /// so and the literal answers for itself.
+    /// Where the line is not the literal's source, `line_text` says so and the
+    /// literal answers for itself.
     #[inline]
     #[must_use]
     pub fn written_text<'t>(&'t self, position: Sourcepos, literal: &'t str) -> (&'t str, usize) {
@@ -144,9 +144,9 @@ impl<'a> Document<'a> {
     /// comes back as one: the run is walked rather than the pairs matched, the
     /// same as everywhere else here.
     ///
-    /// Where the line is not the literal's source, [`Document::line_text`] says
-    /// so and the literal answers for itself — with its escapes already
-    /// resolved, and nothing on it to mask.
+    /// Where the line is not the literal's source, `line_text` says so and the
+    /// literal answers for itself — with its escapes already resolved, and
+    /// nothing on it to mask.
     #[inline]
     #[must_use]
     pub fn written_text_without_escapes<'t>(
