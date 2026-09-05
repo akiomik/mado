@@ -48,15 +48,14 @@ impl RuleLike for MD037 {
                 continue;
             };
 
-            // The line the node was written on rather than its literal. A
-            // marker `CommonMark` resolved an escape off reaches the literal as
-            // a bare one and reads as emphasis, and the offsets of a match stop
-            // naming columns as soon as one has been. The line has the
-            // backslash the author wrote, so the regex passes over the marker it
-            // guards and the offsets it does match are columns already.
-            let (text, column) = doc.written_text(data.sourcepos, literal);
+            // The line the node was written on rather than its literal, whose
+            // offsets stop naming columns as soon as an escape is resolved out
+            // of it, and with the escapes on that line masked out: a marker the
+            // author escaped is not one, and this regex looks for markers in
+            // places that have nothing before them for it to check.
+            let (text, column) = doc.written_text_without_escapes(data.sourcepos, literal);
 
-            let Some(m) = RE.find(text) else {
+            let Some(m) = RE.find(&text) else {
                 continue;
             };
 
@@ -336,9 +335,25 @@ mod tests {
     // Emphasis an author escaped is text, and a pair of escaped markers is not
     // emphasis with spaces inside it. Against the literal both escapes were
     // gone and the pair read as a violation the document does not have.
+    //
+    // The escapes are masked out of the search rather than guarded against
+    // inside it, because the regex looks for a marker in four places that have
+    // nothing before them to check: the closing marker of each start-marker
+    // alternative, and the opening marker of each end-marker one. A backslash
+    // left on the line is also a byte for `.+` to match, so the search reaches
+    // further along the line than the literal ever let it.
     #[test]
     fn check_no_errors_with_escaped_markers() -> Result<()> {
-        let text = "x \\* y \\* z".to_owned();
+        let text = indoc! {r"
+            x \* y \* z
+
+            a b \_ * \*
+
+            a \* b * c
+
+            a * b \*
+        "}
+        .to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
         let doc = Document::new(&arena, path, text)?;

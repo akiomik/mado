@@ -44,10 +44,12 @@ parsed and therefore what gets reported.
 - MD034 and MD037: measure the line a text node was written on rather than the
   string `CommonMark` resolved its escapes out of. A `\.` written earlier in
   the node moved the reported column one to the left of the character it named,
-  and one more for each further escape. MD037 also read an escaped `*` or `_`
-  as an emphasis marker, and reported a line whose only emphasis was the one
-  the author escaped to keep; MD034 now leaves a URL alone when its scheme is
-  escaped, which is how a URL is written so that it is not autolinked (#407)
+  and one more for each further escape (#407)
+- MD037: an escaped `*` or `_` is no longer read as an emphasis marker, so a
+  line whose only emphasis is the one its author escaped to keep is left alone,
+  and a line that has emphasis besides is reported at it (#407)
+- MD034: a URL whose scheme is escaped is left alone, that being how a URL is
+  written so that it is not autolinked (#407)
 
 ## [0.3.1] - 2026-07-22
 

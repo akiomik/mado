@@ -1,3 +1,6 @@
+extern crate alloc;
+
+use alloc::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -98,11 +101,15 @@ impl<'a> Document<'a> {
     /// against a string `CommonMark` has already resolved the escapes in: `\.`
     /// is two bytes on the line and one there, so every offset past it names a
     /// column to the left of the one it was written at, and one more for each
-    /// further escape. An escaped marker fares worse than shifted — it reaches
-    /// the literal as a bare one, where a rule looking for markers finds it and
-    /// reports what the author escaped to keep. The line carries neither: it is
-    /// what was written and what the report points at, so a rule measuring
-    /// against it names the character a reader sees at the column.
+    /// further escape. The line carries what was written and is what the report
+    /// points at, so a rule measuring against it names the character a reader
+    /// sees at the column.
+    ///
+    /// The escapes are on the line, backslash and all. That is what a rule
+    /// looking for a bare URL wants — GFM autolinks `http://example.com/\|y`
+    /// whole and leaves `http\://example.com` alone — and not what a rule
+    /// looking for a marker wants, which is
+    /// [`Document::written_text_without_escapes`].
     ///
     /// The columns are put back on the line by [`Document::written_position`]
     /// first, because a position from inside a table cell is measured against
@@ -110,53 +117,123 @@ impl<'a> Document<'a> {
     /// what this does are the two halves of one report: the position of the
     /// node, and the offsets counted off inside it.
     ///
-    /// The line is answered with only where it reads back as the source the
-    /// literal was built from, which is checked rather than assumed. Two things
-    /// are known to fail it. comrak measures the inlines after one that spans
-    /// two lines — a link with its destination on the line below — from a line
-    /// and column that are both a line behind, and the slice then holds text
-    /// the node was never built from; against the literal that is a wrong
-    /// column, and against the line it would be a violation reported out of
-    /// text the document does not have there. A character reference is resolved
-    /// into the literal the way an escape is, and naming the character `&amp;`
-    /// stands for takes the whole HTML5 table, so a node holding one does not
-    /// read back either.
-    ///
-    /// Both then answer with the literal, at the column comrak reported for the
-    /// node — the pair the rules measured before this, wrong by the escapes in
-    /// it and no more wrong than it was.
+    /// Where the line is not the literal's source, [`Document::line_text`] says
+    /// so and the literal answers for itself.
     #[inline]
     #[must_use]
     pub fn written_text<'t>(&'t self, position: Sourcepos, literal: &'t str) -> (&'t str, usize) {
-        let written = self.written_position(position);
-        let fallback = (literal, written.start.column);
+        self.line_text(position, literal)
+            .unwrap_or_else(|| (literal, self.written_position(position).start.column))
+    }
 
-        if position.start.line != position.end.line {
-            return fallback;
+    /// The text `position` describes with the escapes in it masked out, and the
+    /// column it starts at.
+    ///
+    /// An escaped marker is not a marker, and against the literal it cannot be
+    /// told from one: `CommonMark` resolves `\*` before the literal is built,
+    /// so a rule searching for emphasis reads the marker the author escaped to
+    /// keep. Searching the line instead is not enough on its own — a marker is
+    /// escaped by the byte *before* it, and only some of the places a search
+    /// can find one have something before them to look at — so the escapes are
+    /// taken out of the search rather than guarded against inside it.
+    ///
+    /// Each is replaced by as many bytes as it was written with, so every
+    /// column the search reports is still the column the byte is at, and by a
+    /// letter, which a search for markers and the whitespace around them can
+    /// only read as text. `\\*` is an escaped backslash and then a marker, and
+    /// comes back as one: the run is walked rather than the pairs matched, the
+    /// same as everywhere else here.
+    ///
+    /// Where the line is not the literal's source, [`Document::line_text`] says
+    /// so and the literal answers for itself — with its escapes already
+    /// resolved, and nothing on it to mask.
+    #[inline]
+    #[must_use]
+    pub fn written_text_without_escapes<'t>(
+        &'t self,
+        position: Sourcepos,
+        literal: &'t str,
+    ) -> (Cow<'t, str>, usize) {
+        match self.line_text(position, literal) {
+            Some((text, column)) => (Self::without_escapes(text), column),
+            None => (
+                Cow::Borrowed(literal),
+                self.written_position(position).start.column,
+            ),
         }
+    }
+
+    /// The line `position` was written on, sliced to the columns it covers, and
+    /// the column that slice starts at.
+    ///
+    /// `None` means the line is not the source `literal` was built from, which
+    /// is checked rather than assumed. Two things are known to fail it. comrak
+    /// measures the inlines after one that spans two lines — a link with its
+    /// destination on the line below — from a line and a column that are both a
+    /// line behind, and the slice then holds text the node was never built
+    /// from; against the literal that is a wrong column, and against the line
+    /// it would be a violation reported out of text the document does not have
+    /// there. A character reference is resolved into the literal the way an
+    /// escape is, and naming the character `&amp;` stands for takes the whole
+    /// HTML5 table, so a node holding one does not read back either.
+    ///
+    /// A position naming two lines, or columns its line does not have, has no
+    /// slice to answer with at all.
+    ///
+    /// A caller that answers with the literal instead is measuring what the
+    /// rules measured before any of this: offsets counted off a string the
+    /// escapes are already out of, added to the column comrak reported. The one
+    /// difference is that the column is put back on the line once, for the node,
+    /// rather than once for each column reported out of it, so a `\|` written
+    /// between the start of the node and the offset is a column that stays
+    /// missing. Both are wrong about that offset either way, and neither is a
+    /// line this can read.
+    fn line_text<'t>(&'t self, position: Sourcepos, literal: &str) -> Option<(&'t str, usize)> {
+        if position.start.line != position.end.line {
+            return None;
+        }
+
+        let written = self.written_position(position);
 
         // A line and a column are counted from one, and an index from zero, so
         // a position that starts at either's zero indexes nothing at all.
-        let (Some(index), Some(start)) = (
-            written.start.line.checked_sub(1),
-            written.start.column.checked_sub(1),
-        ) else {
-            return fallback;
-        };
-
-        let Some(text) = self
+        let index = written.start.line.checked_sub(1)?;
+        let start = written.start.column.checked_sub(1)?;
+        let text = self
             .lines
             .get(index)
-            .and_then(|line| line.get(start..written.end.column))
-        else {
-            return fallback;
-        };
+            .and_then(|line| line.get(start..written.end.column))?;
 
-        if Self::is_source_of(text, literal) {
-            return (text, written.start.column);
+        Self::is_source_of(text, literal).then_some((text, written.start.column))
+    }
+
+    /// `written` with the escapes in it masked out, a byte for a byte.
+    ///
+    /// The byte the escape guards goes with the backslash: a marker is what
+    /// there is to hide, and it is the guarded byte that is one.
+    fn without_escapes(written: &str) -> Cow<'_, str> {
+        // Nothing to take out, and nothing to allocate for. Most text is this.
+        if !written.contains('\\') {
+            return Cow::Borrowed(written);
         }
 
-        fallback
+        let mut masked = String::with_capacity(written.len());
+        let mut chars = written.chars().peekable();
+
+        while let Some(char) = chars.next() {
+            match chars.peek() {
+                Some(&next) if char == '\\' && next.is_ascii_punctuation() => {
+                    chars.next();
+
+                    // Two bytes for the two the escape was written with, so an
+                    // offset past this one is still the column it was at.
+                    masked.push_str("xx");
+                }
+                _ => masked.push(char),
+            }
+        }
+
+        Cow::Owned(masked)
     }
 
     /// Whether `CommonMark` built `literal` out of `written`.
@@ -171,6 +248,15 @@ impl<'a> Document<'a> {
     /// not need saying so: `\\|` is walked as `\\` and then `|`, which is the
     /// pair `CommonMark` resolves it to.
     fn is_source_of(written: &str, literal: &str) -> bool {
+        // Resolving an escape takes a byte off, and nothing `CommonMark` does
+        // to a text node puts one back, so two of the same length had no escape
+        // between them and have to be the same bytes. That is nearly every node
+        // in a document, and comparing the two whole is cheaper than walking
+        // them a byte at a time.
+        if written.len() == literal.len() {
+            return written == literal;
+        }
+
         let mut literal = literal.bytes();
         let mut written = written.bytes().peekable();
 
@@ -691,6 +777,54 @@ mod tests {
         assert_eq!(
             doc.written_text(Sourcepos::from((3, 1, 3, 4)), "will be used."),
             ("will be used.", 1)
+        );
+        Ok(())
+    }
+
+    // The escapes are masked a byte for a byte, so a marker the author escaped
+    // is not one the search can find and every column past it is still where it
+    // was. `\\*` is an escaped backslash and then a marker, and the marker
+    // comes back.
+    #[test]
+    fn written_text_without_escapes_of_a_line() -> Result<()> {
+        let text = r"x \* y \\* z".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 12)), r"x * y \* z"),
+            (Cow::Owned("x xx y xx* z".to_owned()), 1)
+        );
+        Ok(())
+    }
+
+    // A line with no escape on it is masked into nothing, and is answered with
+    // as it stands.
+    #[test]
+    fn written_text_without_escapes_of_a_line_without_one() -> Result<()> {
+        let text = "x ** b ** y".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 11)), "x ** b ** y"),
+            (Cow::Borrowed("x ** b ** y"), 1)
+        );
+        Ok(())
+    }
+
+    // The literal has its escapes resolved already, and a backslash still in it
+    // was written as an escaped one — `\*` there is a backslash and a marker,
+    // and masking it would take a marker the document has out of the search.
+    #[test]
+    fn written_text_without_escapes_of_a_literal() -> Result<()> {
+        let text = r"a &amp; b \\* c".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 15)), r"a & b \* c"),
+            (Cow::Borrowed(r"a & b \* c"), 1)
         );
         Ok(())
     }
