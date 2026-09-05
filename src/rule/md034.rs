@@ -23,6 +23,37 @@ impl MD034 {
     pub const fn new() -> Self {
         Self {}
     }
+
+    /// Whether the scan that found `url` stopped at an escape rather than at
+    /// the end of a URL, leaving a piece of text that is no URL at all.
+    ///
+    /// A backslash written into a URL's path is the URL's own, to a scanner
+    /// here and to GFM alike, and the scan runs on through it. One written into
+    /// the authority is a byte no authority can hold, so the scan stops there
+    /// and hands back what came before it — `http://ex` out of
+    /// `http://ex\_ample.com/` — which a scanner that asks no more of an
+    /// authority than a scheme and a name reads as a URL of its own. GFM
+    /// autolinks nothing there, the authority being what the escape spoiled, so
+    /// neither does this.
+    ///
+    /// The literal says which of the two happened: it holds the authority with
+    /// the escape resolved, so a scan of it finds the URL that was written or
+    /// finds nothing where there is none. A scan that stopped at an escape
+    /// never took one, so what it did take is a prefix of whatever stands there
+    /// in the literal.
+    fn is_cut_short(finder: &LinkFinder, url: &str, rest: &str, literal: &str) -> bool {
+        Self::starts_with_escape(rest)
+            && !finder
+                .links(literal)
+                .any(|link| link.as_str().starts_with(url))
+    }
+
+    /// Whether `text` begins with a `\<punctuation>` escape.
+    fn starts_with_escape(text: &str) -> bool {
+        let mut chars = text.chars();
+
+        chars.next() == Some('\\') && chars.next().is_some_and(|char| char.is_ascii_punctuation())
+    }
 }
 
 impl RuleLike for MD034 {
@@ -58,6 +89,10 @@ impl RuleLike for MD034 {
             let (text, column) = doc.written_text(data.sourcepos, literal);
 
             for link in finder.links(text) {
+                if Self::is_cut_short(&finder, link.as_str(), &text[link.end()..], literal) {
+                    continue;
+                }
+
                 // NOTE: link.start and link.end start from 0, and count off
                 //       `column`, which is where the text starts on the line.
                 let mut position = data.sourcepos;
@@ -266,6 +301,55 @@ mod tests {
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
         let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A scan of the line stops inside the authority at a backslash, and what it
+    // hands back — `http://ex` here — is a URL to a scanner that asks no more of
+    // an authority than a scheme and a name. GFM autolinks nothing on this line,
+    // the authority being what the escape spoiled, and the literal says so: with
+    // the escape resolved there is no URL in it to be a prefix of.
+    #[test]
+    fn check_no_errors_with_escaped_authority() -> Result<()> {
+        let text = "see http://my\\_site.com/ now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The scan stops at the same escape here, and this time the literal does
+    // hold the URL the line was written with, so the piece the scan took is a
+    // prefix of it and the URL beside it is nobody's prefix.
+    #[test]
+    fn check_errors_with_escaped_authority_beside_a_url() -> Result<()> {
+        let text = "http://ex\\_ample.com/ and http://good.com".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 27, 1, 42)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A backslash written into the path is the URL's own, and the scan runs on
+    // through it as GFM does, so nothing here was cut short.
+    #[test]
+    fn check_errors_with_escaped_path() -> Result<()> {
+        let text = "see http://www.example.com/foo\\_bar now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 36)))];
         assert_eq!(actual, expected);
         Ok(())
     }

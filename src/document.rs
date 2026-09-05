@@ -791,10 +791,13 @@ mod tests {
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
-        assert_eq!(
-            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 12)), r"x * y \* z"),
-            (Cow::Owned("x xx y xx* z".to_owned()), 1)
-        );
+        let actual =
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 12)), r"x * y \* z");
+
+        // `Cow` compares what it holds and not which of the two it is, so the
+        // masking is asked for by name as well as by what it produced.
+        assert!(matches!(actual.0, Cow::Owned(_)));
+        assert_eq!(actual, (Cow::Owned("x xx y xx* z".to_owned()), 1));
         Ok(())
     }
 
@@ -806,10 +809,13 @@ mod tests {
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
-        assert_eq!(
-            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 11)), "x ** b ** y"),
-            (Cow::Borrowed("x ** b ** y"), 1)
-        );
+        let actual =
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 11)), "x ** b ** y");
+
+        // Borrowed, so the line was answered with as it stands rather than
+        // copied to take nothing out of.
+        assert!(matches!(actual.0, Cow::Borrowed(_)));
+        assert_eq!(actual, (Cow::Borrowed("x ** b ** y"), 1));
         Ok(())
     }
 
@@ -822,10 +828,12 @@ mod tests {
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
-        assert_eq!(
-            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 15)), r"a & b \* c"),
-            (Cow::Borrowed(r"a & b \* c"), 1)
-        );
+        let actual =
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 15)), r"a & b \* c");
+
+        // Borrowed, and the literal's own: nothing was masked out of it.
+        assert!(matches!(actual.0, Cow::Borrowed(_)));
+        assert_eq!(actual, (Cow::Borrowed(r"a & b \* c"), 1));
         Ok(())
     }
 

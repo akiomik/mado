@@ -48,8 +48,9 @@ parsed and therefore what gets reported.
 - MD037: an escaped `*` or `_` is no longer read as an emphasis marker, so a
   line whose only emphasis is the one its author escaped to keep is left alone,
   and a line that has emphasis besides is reported at it (#407)
-- MD034: a URL whose scheme is escaped is left alone, that being how a URL is
-  written so that it is not autolinked (#407)
+- MD034: a URL is left alone when an escape is written into its scheme or its
+  host, neither of which GFM autolinks (#407)
+- MD037: report the marker after a tab rather than the tab itself (#407)
 
 ## [0.3.1] - 2026-07-22
 

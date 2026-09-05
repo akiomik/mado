@@ -69,7 +69,14 @@ impl RuleLike for MD037 {
 
             // NOTE: m.start and m.end start from 0, and count off `column`,
             //       which is where the text starts on the line.
-            if m.as_str().starts_with(' ') {
+            //
+            // The alternatives that begin at a start marker begin at the
+            // whitespace before it, and the ones that begin at an end marker
+            // begin at the marker, so what the match begins with says which
+            // matched. Asked about a space alone, a tab written before a marker
+            // answered for the end-marker arithmetic and put the report on the
+            // tab rather than on the marker after it.
+            if m.as_str().starts_with(char::is_whitespace) {
                 // When a start marker matches
                 position.start.column = column + m.start() + 1;
                 position.end.column = column + m.end() - 1;
@@ -366,6 +373,21 @@ mod tests {
         let rule = MD037::new();
         let actual = rule.check(&doc)?;
         let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The regex anchors a start marker to `\s`, which is a tab as much as a
+    // space, and the report belongs on the marker either way.
+    #[test]
+    fn check_errors_with_tab_before_marker() -> Result<()> {
+        let text = "x\t** b ** y".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 3, 1, 9)))];
         assert_eq!(actual, expected);
         Ok(())
     }
