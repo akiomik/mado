@@ -41,6 +41,13 @@ parsed and therefore what gets reported.
   the same line above a table's header row, moved an inline's reported column
   one to the left of the character it named, and one more for each further
   escape (#405)
+- MD034 and MD037: measure the line a text node was written on rather than the
+  string `CommonMark` resolved its escapes out of. A `\.` written earlier in
+  the node moved the reported column one to the left of the character it named,
+  and one more for each further escape. MD037 also read an escaped `*` or `_`
+  as an emphasis marker, and reported a line whose only emphasis was the one
+  the author escaped to keep; MD034 now leaves a URL alone when its scheme is
+  escaped, which is how a URL is written so that it is not autolinked (#407)
 
 ## [0.3.1] - 2026-07-22
 

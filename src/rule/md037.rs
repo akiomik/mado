@@ -33,9 +33,7 @@ impl RuleLike for MD037 {
         &Self::METADATA
     }
 
-    // TODO: Use safe casting
     #[inline]
-    #[allow(clippy::cast_possible_wrap)]
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         static RE: LazyLock<Regex> = LazyLock::new(|| {
             #[allow(clippy::unwrap_used)]
@@ -45,28 +43,39 @@ impl RuleLike for MD037 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            if let NodeValue::Text(text) = &node.data.borrow().value
-                && let Some(m) = RE.find(text)
-            {
-                // The match indexes `text`, where a backslash escape has already
-                // been resolved, so its offsets only name columns while that and
-                // the line are the same length — and an escaped marker reaches
-                // the regex as a bare one. #406 covers both.
-                let mut position = node.data.borrow().sourcepos;
+            let data = node.data.borrow();
+            let NodeValue::Text(literal) = &data.value else {
+                continue;
+            };
 
-                if m.as_str().starts_with(' ') {
-                    // When a start marker matches
-                    position.end = position.start.column_add(m.end() as isize - 1);
-                    position.start = position.start.column_add(m.start() as isize + 1);
-                } else {
-                    // When an end marker matches
-                    position.end = position.start.column_add(m.end() as isize - 2);
-                    position.start = position.start.column_add(m.start() as isize);
-                }
+            // The line the node was written on rather than its literal. A
+            // marker `CommonMark` resolved an escape off reaches the literal as
+            // a bare one and reads as emphasis, and the offsets of a match stop
+            // naming columns as soon as one has been. The line has the
+            // backslash the author wrote, so the regex passes over the marker it
+            // guards and the offsets it does match are columns already.
+            let (text, column) = doc.written_text(data.sourcepos, literal);
 
-                let violation = self.to_violation(doc.path.clone(), doc.written_position(position));
-                violations.push(violation);
+            let Some(m) = RE.find(text) else {
+                continue;
+            };
+
+            let mut position = data.sourcepos;
+
+            // NOTE: m.start and m.end start from 0, and count off `column`,
+            //       which is where the text starts on the line.
+            if m.as_str().starts_with(' ') {
+                // When a start marker matches
+                position.start.column = column + m.start() + 1;
+                position.end.column = column + m.end() - 1;
+            } else {
+                // When an end marker matches
+                position.start.column = column + m.start();
+                position.end.column = column + m.end() - 2;
             }
+
+            let violation = self.to_violation(doc.path.clone(), position);
+            violations.push(violation);
         }
 
         Ok(violations)
@@ -260,6 +269,82 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((3, 8, 3, 14))),
             rule.to_violation(path, Sourcepos::from((4, 11, 4, 17))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A backslash escape is resolved before the text node's literal is built,
+    // so the literal is a byte shorter than the line for each one and the
+    // marker's offset in it names a column to the left of where it was written.
+    // The line is measured instead, and the escape keeps its two columns.
+    #[test]
+    fn check_errors_with_escaped_punctuation() -> Result<()> {
+        let text = indoc! {r"
+            x \. y ** b ** z
+
+            | a | b |
+            | --- | --- |
+            | x \. y ** b ** | c |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 8, 1, 14))),
+            rule.to_violation(path, Sourcepos::from((5, 10, 5, 16))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // Outside a table cell and the paragraph comrak splits off a header row,
+    // `\|` is resolved by the inline parser like any other escape, so it costs
+    // the literal a byte there rather than shifting the columns comrak reports.
+    #[test]
+    fn check_errors_with_escaped_pipe_outside_table() -> Result<()> {
+        let text = "see x\\|y\\|z ** b ** w".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 13, 1, 19)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // An escaped marker reaches the literal as a bare one, so a match could
+    // begin at a marker that is not one and name a column that holds neither of
+    // the markers on the line. The line keeps the backslash that guards it, and
+    // the match begins at the emphasis that is really there.
+    #[test]
+    fn check_errors_with_escaped_marker() -> Result<()> {
+        let text = "x \\* y ** b ** z".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 8, 1, 14)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // Emphasis an author escaped is text, and a pair of escaped markers is not
+    // emphasis with spaces inside it. Against the literal both escapes were
+    // gone and the pair read as a violation the document does not have.
+    #[test]
+    fn check_no_errors_with_escaped_markers() -> Result<()> {
+        let text = "x \\* y \\* z".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }

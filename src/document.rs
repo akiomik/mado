@@ -92,6 +92,107 @@ impl<'a> Document<'a> {
         written
     }
 
+    /// The text `position` describes, and the column it starts at.
+    ///
+    /// A rule that counts an offset off a text node's `literal` is measuring
+    /// against a string `CommonMark` has already resolved the escapes in: `\.`
+    /// is two bytes on the line and one there, so every offset past it names a
+    /// column to the left of the one it was written at, and one more for each
+    /// further escape. An escaped marker fares worse than shifted — it reaches
+    /// the literal as a bare one, where a rule looking for markers finds it and
+    /// reports what the author escaped to keep. The line carries neither: it is
+    /// what was written and what the report points at, so a rule measuring
+    /// against it names the character a reader sees at the column.
+    ///
+    /// The columns are put back on the line by [`Document::written_position`]
+    /// first, because a position from inside a table cell is measured against
+    /// the unescaped cell rather than against the line. What that corrects and
+    /// what this does are the two halves of one report: the position of the
+    /// node, and the offsets counted off inside it.
+    ///
+    /// The line is answered with only where it reads back as the source the
+    /// literal was built from, which is checked rather than assumed. Two things
+    /// are known to fail it. comrak measures the inlines after one that spans
+    /// two lines — a link with its destination on the line below — from a line
+    /// and column that are both a line behind, and the slice then holds text
+    /// the node was never built from; against the literal that is a wrong
+    /// column, and against the line it would be a violation reported out of
+    /// text the document does not have there. A character reference is resolved
+    /// into the literal the way an escape is, and naming the character `&amp;`
+    /// stands for takes the whole HTML5 table, so a node holding one does not
+    /// read back either.
+    ///
+    /// Both then answer with the literal, at the column comrak reported for the
+    /// node — the pair the rules measured before this, wrong by the escapes in
+    /// it and no more wrong than it was.
+    #[inline]
+    #[must_use]
+    pub fn written_text<'t>(&'t self, position: Sourcepos, literal: &'t str) -> (&'t str, usize) {
+        let written = self.written_position(position);
+        let fallback = (literal, written.start.column);
+
+        if position.start.line != position.end.line {
+            return fallback;
+        }
+
+        // A line and a column are counted from one, and an index from zero, so
+        // a position that starts at either's zero indexes nothing at all.
+        let (Some(index), Some(start)) = (
+            written.start.line.checked_sub(1),
+            written.start.column.checked_sub(1),
+        ) else {
+            return fallback;
+        };
+
+        let Some(text) = self
+            .lines
+            .get(index)
+            .and_then(|line| line.get(start..written.end.column))
+        else {
+            return fallback;
+        };
+
+        if Self::is_source_of(text, literal) {
+            return (text, written.start.column);
+        }
+
+        fallback
+    }
+
+    /// Whether `CommonMark` built `literal` out of `written`.
+    ///
+    /// The escapes are the difference between the two that this knows about:
+    /// the backslash of a `\<punctuation>` is not in the literal, and the byte
+    /// it guards stands there for the pair. Everything else has to be equal,
+    /// byte for byte and to the same length, so text from some other part of
+    /// the document is not taken for this node's.
+    ///
+    /// A backslash that is itself escaped does not start an escape, and does
+    /// not need saying so: `\\|` is walked as `\\` and then `|`, which is the
+    /// pair `CommonMark` resolves it to.
+    fn is_source_of(written: &str, literal: &str) -> bool {
+        let mut literal = literal.bytes();
+        let mut written = written.bytes().peekable();
+
+        while let Some(byte) = written.next() {
+            // The backslash of an escape is not in the literal, where the byte
+            // it guards stands for the pair.
+            let byte = match written.peek() {
+                Some(&next) if byte == b'\\' && next.is_ascii_punctuation() => {
+                    written.next();
+                    next
+                }
+                _ => byte,
+            };
+
+            if literal.next() != Some(byte) {
+                return false;
+            }
+        }
+
+        literal.next().is_none()
+    }
+
     /// The column as written, for one comrak reports on `line`.
     ///
     /// A column belongs to the last region that begins at or before it. A
@@ -496,6 +597,132 @@ mod tests {
         let doc = Document::new(&arena, path, text)?;
         let position = Sourcepos::from((1, 3, 1, 4));
         assert_eq!(doc.written_position(position), position);
+        Ok(())
+    }
+
+    // The text is taken from the line, so an escape the literal no longer has
+    // is in it and the column it is read from is the one it was written at.
+    #[test]
+    fn written_text_of_a_line() -> Result<()> {
+        let text = "x \\. y ** b ** z".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((1, 3, 1, 7)), ". y "),
+            (r"\. y ", 3)
+        );
+        Ok(())
+    }
+
+    // comrak measures a position from inside a table cell against the
+    // unescaped cell, so the columns are put back on the line before the text
+    // is read from it — off by one here, where the column comrak reports for
+    // the `y` lands on the `|` of the escape before it.
+    #[test]
+    fn written_text_in_a_table_cell() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\|y w | c |
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((3, 5, 3, 7)), "y w"),
+            ("y w", 6)
+        );
+        Ok(())
+    }
+
+    // A position that names two lines describes no slice of either, and one
+    // reaching past the end of its line describes none of it. Neither is a line
+    // to measure against, so the literal answers for itself.
+    #[test]
+    fn written_text_of_no_line() -> Result<()> {
+        let text = "x y\nz w".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((1, 1, 2, 3)), "x y z w"),
+            ("x y z w", 1)
+        );
+        assert_eq!(
+            doc.written_text(Sourcepos::from((1, 1, 1, 4)), "x y"),
+            ("x y", 1)
+        );
+        assert_eq!(
+            doc.written_text(Sourcepos::from((3, 1, 3, 1)), "v"),
+            ("v", 1)
+        );
+        assert_eq!(
+            doc.written_text(Sourcepos::from((0, 0, 0, 0)), "x y"),
+            ("x y", 0)
+        );
+        Ok(())
+    }
+
+    // The line a position names is not always the one the literal was built
+    // from: comrak measures the inlines after one that spans two lines from a
+    // line behind, and the slice is then some other text of the document
+    // entirely. Reading it back as the literal's source is what tells the two
+    // apart, and the literal answers for itself where it is not.
+    #[test]
+    fn written_text_of_a_line_that_is_not_the_source() -> Result<()> {
+        let text = indoc! {"
+            a [b](
+            https://www.example.com/) c
+            will be used.
+        "}
+        .to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((2, 1, 2, 13)), "will be used."),
+            ("will be used.", 1)
+        );
+
+        // And the slice being a piece of what the literal holds is not the
+        // literal's source either.
+        assert_eq!(
+            doc.written_text(Sourcepos::from((3, 1, 3, 4)), "will be used."),
+            ("will be used.", 1)
+        );
+        Ok(())
+    }
+
+    // A character reference is resolved into the literal the way an escape is,
+    // and is not one this can put back, so the line does not read back as the
+    // source and the literal answers for itself.
+    #[test]
+    fn written_text_of_a_character_reference() -> Result<()> {
+        let text = "a &amp; b".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((1, 1, 1, 9)), "a & b"),
+            ("a & b", 1)
+        );
+        Ok(())
+    }
+
+    // `\\|` is an escaped backslash and a pipe, which `CommonMark` resolves to
+    // the two bytes it walks as one escape and one byte of its own.
+    #[test]
+    fn written_text_with_escaped_backslash() -> Result<()> {
+        let text = r"a \\| b".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+        assert_eq!(
+            doc.written_text(Sourcepos::from((1, 1, 1, 7)), r"a \| b"),
+            (r"a \\| b", 1)
+        );
         Ok(())
     }
 
