@@ -72,10 +72,12 @@ impl<'a> Document<'a> {
     /// carries neither, or before the first region on a line that does, is
     /// returned unchanged.
     ///
-    /// The pipe is the only escape this knows about, and it is the only one
-    /// comrak resolves before it measures: a column that a `\<punctuation>`
-    /// escape put wrong was never shifted by comrak and cannot be found from
-    /// here. #406 covers those.
+    /// The pipe is the only escape this knows about, and only where it is
+    /// resolved ahead of the inline parser rather than by it — inside a cell,
+    /// or in that paragraph. Written anywhere else it is resolved like any
+    /// other escape, `\<punctuation>` and `\|` alike, and a column that leaves
+    /// wrong is one comrak never shifted and nothing here can find. #406
+    /// covers those.
     ///
     /// A column is put back on the line by the character comrak reports at it,
     /// so a caller whose own arithmetic named the byte *after* a span — an
