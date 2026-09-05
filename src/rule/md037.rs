@@ -48,6 +48,10 @@ impl RuleLike for MD037 {
             if let NodeValue::Text(text) = &node.data.borrow().value
                 && let Some(m) = RE.find(text)
             {
+                // The match indexes `text`, where a backslash escape has already
+                // been resolved, so its offsets only name columns while that and
+                // the line are the same length — and an escaped marker reaches
+                // the regex as a bare one. #406 covers both.
                 let mut position = node.data.borrow().sourcepos;
 
                 if m.as_str().starts_with(' ') {
@@ -60,7 +64,7 @@ impl RuleLike for MD037 {
                     position.start = position.start.column_add(m.start() as isize);
                 }
 
-                let violation = self.to_violation(doc.path.clone(), position);
+                let violation = self.to_violation(doc.path.clone(), doc.written_position(position));
                 violations.push(violation);
             }
         }
@@ -230,6 +234,32 @@ mod tests {
         let rule = MD037::new();
         let actual = rule.check(&doc)?;
         let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // comrak unescapes a table cell before parsing its inlines, so the columns
+    // it reports from inside one are short a byte for every `\|` written before
+    // them. The rule adds its own offsets on top of a start that has already
+    // been shifted, and both are put back together.
+    #[test]
+    fn check_errors_with_escaped_pipe_in_table() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\|y ** b ** | c |
+            | x\|y\|z ** b ** | c |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((3, 8, 3, 14))),
+            rule.to_violation(path, Sourcepos::from((4, 11, 4, 17))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }

@@ -55,6 +55,9 @@ impl MD038 {
     /// inlines, so inside one every `\|` earlier in the cell shifts the columns
     /// of everything after it by a byte. A width survives that — both ends shift
     /// together — where a slice of `doc.lines` would read the wrong text.
+    /// [`Document::written_position`] undoes the shift, but only for the report:
+    /// the columns handed here still describe the unescaped content, which is
+    /// the string `literal` came from and so the one to measure against.
     ///
     /// `None` means the columns do not describe a span at all, and the caller
     /// then skips it: a position we cannot measure is not evidence of a
@@ -140,7 +143,10 @@ impl RuleLike for MD038 {
                 };
 
                 if Self::is_padded(&content) {
-                    let violation = self.to_violation(doc.path.clone(), position);
+                    // `content` is measured against the columns comrak reports;
+                    // only the report is put back on the line as written.
+                    let violation =
+                        self.to_violation(doc.path.clone(), doc.written_position(position));
                     violations.push(violation);
                 }
             }
@@ -361,12 +367,10 @@ mod tests {
 
     // comrak unescapes a table cell before parsing its inlines, so `sourcepos`
     // no longer indexes the line the cell was written on. Widths survive that;
-    // both spans here are measured, not sliced.
-    //
-    // NOTE: the column asserted here is one to the left of the backtick it names
-    // — one for the single `\|` before it — and is what mado reports today
-    // rather than what it should. The shift is in the position comrak records,
-    // not in this rule, and reaches every inline it forwards; #403 tracks it.
+    // both spans here are measured, not sliced. The report does not survive it,
+    // and `Document::written_position` is what puts it back: the backtick the
+    // column below names is at column 8, one to the right of where comrak has
+    // it because of the single `\|` before it.
     #[test]
     fn check_errors_with_escaped_pipe_in_table() -> Result<()> {
         let text = indoc! {r"
@@ -381,7 +385,28 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD038::new();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((4, 7, 4, 21)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((4, 8, 4, 22)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // Two escapes shift the span by two, and one written inside the span shifts
+    // its end one further than its start. The width the rule measures is taken
+    // before any of that is undone, so it still describes the unescaped content.
+    #[test]
+    fn check_errors_with_escaped_pipe_inside_code_span_in_table() -> Result<()> {
+        let text = indoc! {r"
+            | a | b |
+            | --- | --- |
+            | x\|y\|z `` a\|b `` | c |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 11, 3, 20)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -465,6 +490,27 @@ mod tests {
         let rule = MD038::new();
         let actual = rule.check(&doc)?;
         let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // comrak unescapes the paragraph it splits off a table's header row too, so
+    // a span written above a table is shifted like one written in it.
+    #[test]
+    fn check_errors_with_escaped_pipe_in_table_header_preface() -> Result<()> {
+        let text = indoc! {r"
+            text x\|y `` some text `` here
+            | a | b |
+            | --- | --- |
+            | c | d |
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD038::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 11, 1, 25)))];
         assert_eq!(actual, expected);
         Ok(())
     }
