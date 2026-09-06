@@ -84,9 +84,52 @@ update-winget-hash-windows-amd64: (update-winget-hash "mado-Windows-msvc-x86_64.
 
 update-winget-hash-all: update-winget-hash-windows-amd64
 
-update-winget: update-winget-hash-all
+# `ReleaseDate` is the date WinGet shows the installer as released on, so it has
+# to move with every version. It comes from the changelog rather than today's
+# date: `update-winget` runs once CD has finished, which is not always the day
+# the release is dated. Only `YYYY-MM-DD` counts: that is all the manifest
+# schema's `date` format admits, and a heading written any other way does not
+# say which day it means.
+#
+# `update-winget` reads the date through this recipe, and checks the manifest is
+# the one being replaced and still has a `ReleaseDate` line to stamp, before the
+# checksums are downloaded. Whatever cannot be answered stops the recipe while
+# the manifest is still untouched, rather than after the version and the
+# checksum have gone in.
+#
+# Checking `PackageVersion` is what keeps the stamp honest. It is the one edit
+# in `update-winget` that does not key on `prev_version`, so a `prev_version`
+# left behind would leave the version, the URL and the checksum untouched, stamp
+# the date anyway, and report a finished release in a one-line diff.
+[private]
+winget-release-date:
+    @echo 'Reading the release date for {{ version }} from CHANGELOG.md...'
+    @sed -n 's/^## \[{{ version }}\] - \([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)$/\1/p' CHANGELOG.md \
+      > {{ tempdir }}/release-date
+    @dates=`wc -l < {{ tempdir }}/release-date` \
+      && if [ "$dates" -eq 0 ]; then \
+           echo 'CHANGELOG.md has no `## [{{ version }}] - YYYY-MM-DD` section' >&2; \
+           exit 1; \
+         elif [ "$dates" -gt 1 ]; then \
+           echo 'CHANGELOG.md dates `## [{{ version }}]` more than once' >&2; \
+           exit 1; \
+         fi
+    @at=`sed -n 's/^PackageVersion: //p' pkg/winget/mado.yml` \
+      && if [ "$at" != '{{ prev_version }}' ]; then \
+           echo "pkg/winget/mado.yml is at '$at'; prev_version in the justfile names {{ prev_version }}" >&2; \
+           exit 1; \
+         fi
+    @if ! grep -q '^ReleaseDate: ' pkg/winget/mado.yml; then \
+         echo 'pkg/winget/mado.yml has no ReleaseDate line to stamp' >&2; \
+         exit 1; \
+       fi
+
+update-winget: winget-release-date update-winget-hash-all
     @echo 'Updating pkg/winget/mado.yml for {{ version }}...'
     @sed -I '' "s/{{ prev_version }}/{{ version }}/" pkg/winget/mado.yml
+    @release_date=`cat {{ tempdir }}/release-date` \
+      && echo "Stamping ReleaseDate as $release_date..." \
+      && sed -I '' "s/^ReleaseDate: .*/ReleaseDate: $release_date/" pkg/winget/mado.yml
 
 [private]
 nix-hash version target:

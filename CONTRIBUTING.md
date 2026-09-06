@@ -64,7 +64,10 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    release being packaged, so none of them can run any earlier. This is also why
    `flake.nix` and the manifests under `pkg/` still name the previous version at
    the moment the tag is pushed, and why `nix run github:akiomik/mado/vx.y.z`
-   gets the release before it.
+   gets the release before it. `just update-winget` also stamps `ReleaseDate` —
+   the date WinGet shows the installer as released on — from the changelog
+   heading for the version, and stops rather than leave the previous release's
+   date behind if step 1 left that section undated.
 
 CD builds the binaries for every platform and publishes one release once all of
 them are packaged. Its body is that version's changelog section, extracted by
