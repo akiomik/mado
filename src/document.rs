@@ -102,11 +102,13 @@ impl<'a> Document<'a> {
     /// raw HTML tag is not text by the time the parser is reading it, and a
     /// destination is where a URL is usually written.
     ///
-    /// A text node inside a link is passed over for the same reason. comrak
-    /// refuses an autolink inside brackets, so the extended parse forms none
-    /// where `ast` has link text, and `<https://example.com>` — a text node
-    /// whose whole content is a marker — is the one place a text node holds a
-    /// URL nothing can be made of.
+    /// A text node inside a link is not passed over, tempting as it is: comrak
+    /// refuses an autolink while it is inside brackets, but it counts its way
+    /// out of them on any `]` at all, so the `http://x.example.com/` of
+    /// `[a [b] http://x.example.com/](y)` is inside link text and autolinked
+    /// both. Skipping those made a URL's report depend on whether the document
+    /// had another one somewhere else, which is the shape of bug that is worst
+    /// to have: not a wrong report, but a right one that is not made.
     ///
     /// `autolink_ast_is_ast_only_when_the_trees_agree` is the test that this
     /// reasoning is comrak's behaviour and not just an account of it.
@@ -120,12 +122,6 @@ impl<'a> Document<'a> {
             let NodeValue::Text(literal) = &node.data.borrow().value else {
                 return false;
             };
-
-            if let Some(parent) = node.parent()
-                && matches!(parent.data.borrow().value, NodeValue::Link(_))
-            {
-                return false;
-            }
 
             literal.contains("://") || literal.contains("www.") || literal.contains('@')
         });
@@ -538,6 +534,13 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn open() {
+        let arena = Arena::new();
+        let path = Path::new("README.md");
+        assert!(Document::open(&arena, path).is_ok());
+    }
+
     // `Document::parse_with_autolink` hands `ast` back for a document it reads
     // as one the extension can find no autolink in, and MD034 walks whatever it
     // hands back — so a document it is wrong about is one MD034 reports nothing
@@ -556,17 +559,22 @@ mod tests {
     //
     // The inputs are the shapes the argument turns on. A marker the parser
     // never reads as text — a destination, a code span, a raw HTML tag, an
-    // indented or fenced block — is one no autolink can be made of. A marker
-    // inside brackets is one comrak refuses, whether the brackets resolve to a
-    // link or not. A marker in prose is owed the second parse, alongside the
-    // ones that only look like markers.
+    // indented or fenced block — is one no autolink can be made of, and those
+    // are the documents that are their own answer. A marker in text is owed the
+    // second parse wherever it is written, link text included: comrak refuses
+    // an autolink inside brackets but counts its way out of them on any `]`,
+    // which the three nested rows are here for. And the markers that only look
+    // like markers are owed nothing.
     #[test]
     fn autolink_ast_is_ast_only_when_the_trees_agree() -> Result<()> {
         let texts = [
             ("see http://www.example.com/ now", false),
-            ("see <http://www.example.com/> now", true),
+            ("see <http://www.example.com/> now", false),
             ("see [x](http://www.example.com/) now", true),
-            ("see [http://www.example.com/](y) now", true),
+            ("see [http://www.example.com/](y) now", false),
+            ("see [a [b] http://www.example.com/](y) now", false),
+            ("see [[a] http://www.example.com/](y) now", false),
+            ("see [a ![b](i.png) http://www.example.com/](y) now", false),
             ("see ![http://www.example.com/](y.png) now", false),
             ("see [http://www.example.com/] now", false),
             ("see [x] now\n\n[x]: http://www.example.com/", true),
@@ -578,8 +586,8 @@ mod tests {
             ("see www.example.com now", false),
             ("see foo@example.com now", false),
             ("see mailto:foo@example.com now", false),
-            ("see <foo@example.com> now", true),
-            ("see [foo@example.com](y) now", true),
+            ("see <foo@example.com> now", false),
+            ("see [foo@example.com](y) now", false),
             (r"see http\://www.example.com/ now", false),
             ("see http://localhost/x now", false),
             (r"see http://ex\_ample.com/ now", false),

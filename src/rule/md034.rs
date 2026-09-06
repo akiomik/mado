@@ -295,6 +295,24 @@ mod tests {
         Ok(())
     }
 
+    // comrak refuses an autolink inside brackets and counts its way out of them
+    // on any `]`, so the URL after the `]` of a nested pair is inside link text
+    // and autolinked both — and the autolink runs to the next space, taking the
+    // `](y)` that would have closed the link with it. What is reported is the
+    // link GFM makes, whether or not the document has another URL elsewhere.
+    #[test]
+    fn check_errors_with_bare_url_after_nested_brackets() -> Result<()> {
+        let text = "see [a [b] http://x.example.com/](y) now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 12, 1, 37)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // An image's alt text is square brackets too, and GFM autolinks nothing
     // inside them: the alt text of the rendered image is the URL as text, and
     // no reader is handed a link to it.
