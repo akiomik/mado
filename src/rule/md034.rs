@@ -51,7 +51,7 @@ impl RuleLike for MD034 {
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 
-        for node in doc.ast.descendants() {
+        for node in doc.autolink_ast.descendants() {
             let data = node.data.borrow();
             if !matches!(data.value, NodeValue::Link(_)) || !Self::is_bare(node, data.sourcepos) {
                 continue;
@@ -234,6 +234,22 @@ mod tests {
     #[test]
     fn check_no_errors_with_url_in_square_brackets() -> Result<()> {
         let text = "For more information, see [http://www.example.com/].".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // An image's alt text is square brackets too, and GFM autolinks nothing
+    // inside them: the alt text of the rendered image is the URL as text, and
+    // no reader is handed a link to it.
+    #[test]
+    fn check_no_errors_with_url_in_image_alt_text() -> Result<()> {
+        let text = "For more information, see ![x http://www.example.com/](y.png).".to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
         let doc = Document::new(&arena, path, text)?;

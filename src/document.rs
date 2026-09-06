@@ -15,6 +15,31 @@ use rustc_hash::FxHashMap;
 pub struct Document<'a> {
     pub path: PathBuf,
     pub ast: &'a AstNode<'a>,
+
+    /// The same document parsed with GFM's autolink extension on, which MD034
+    /// walks and no other rule does.
+    ///
+    /// What MD034 reports is a URL a reader is handed a link to without anyone
+    /// having written a link around it, and the autolink extension is what
+    /// decides which text that is: `http\://example.com` and
+    /// `http://localhost/x` are both URLs to a scanner and neither is linked,
+    /// while `http://ex\-ample.com/` is linked with the backslash still in it.
+    /// Asking comrak is asking the parser the rule reports on.
+    ///
+    /// It is a tree of its own because the extension does not only add links.
+    /// A bare URL takes the text around it with it, splitting the text node it
+    /// was written in into as many as three, and a rule that reads a text node
+    /// whole reads a different document for it: MD036 counts a paragraph's
+    /// emphasis once per text node in it, MD037 matches an emphasis pair inside
+    /// one, and MD020 asks whether a heading's last one ends in a `#`. None of
+    /// them is asking about links, and each of them is wrong about a document
+    /// that has one.
+    ///
+    /// This is [`Document::ast`] itself where the two would be the same tree,
+    /// which is most documents: a URL is usually written as a link's
+    /// destination, and no autolink can be made out of one.
+    pub autolink_ast: &'a AstNode<'a>,
+
     pub text: String,
     pub lines: Vec<String>,
 
@@ -41,28 +66,63 @@ impl<'a> Document<'a> {
         let mut options = Options::default();
         options.extension.front_matter_delimiter = Some("---".to_owned());
         options.extension.table = true;
-
-        // What MD034 reports is the URL a reader is handed a link to without
-        // having asked for one, and GFM's autolink extension is what decides
-        // which text that is: `http\://example.com` and `http://localhost/x`
-        // are both URLs to a scanner and neither is linked, while
-        // `http://ex\-ample.com/` is linked with the backslash still in it.
-        // Asking comrak for the extension is asking the parser the rule is
-        // reporting on, rather than asking a URL scanner a question about
-        // Markdown. The links it adds are the ones the rule walks; every other
-        // rule sees the bare URLs it used to see as text wrapped in a link.
-        options.extension.autolink = true;
         let ast = parse_document(arena, &text, &options);
+        let autolink_ast = Self::parse_with_autolink(arena, &text, &mut options, ast);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
         let unescaped_regions = Self::unescaped_regions(ast, &lines, &text);
 
         Ok(Self {
             path,
             ast,
+            autolink_ast,
             text,
             lines,
             unescaped_regions,
         })
+    }
+
+    /// [`Document::autolink_ast`], parsed only where it would differ from
+    /// `ast`.
+    ///
+    /// A document no autolink can be found in is its own answer, and is handed
+    /// back rather than parsed a second time. comrak begins an autolink at a
+    /// `://`, a `www.` or an `@`, and only where the inline parser is reading
+    /// text: a URL written as a link's destination or inside a code span is not
+    /// text by the time it is one. So the text nodes are asked rather than the
+    /// document, and a URL inside a link is passed over, that being the one
+    /// place a text node holds a URL nothing can be made of. Whatever an
+    /// autolink is made of is text without the extension, so a document whose
+    /// text nodes hold none of the three parses the same either way — most of
+    /// them, a destination being where a URL is usually written.
+    fn parse_with_autolink(
+        arena: &'a Arena<'a>,
+        text: &str,
+        options: &mut Options,
+        ast: &'a AstNode<'a>,
+    ) -> &'a AstNode<'a> {
+        let possible = ast.descendants().any(|node| {
+            let NodeValue::Text(literal) = &node.data.borrow().value else {
+                return false;
+            };
+
+            // The text of a link is not text the extension reads, and the URL
+            // of an `<https://example.com>` is a text node holding a marker
+            // that could never begin an autolink.
+            if let Some(parent) = node.parent()
+                && matches!(parent.data.borrow().value, NodeValue::Link(_))
+            {
+                return false;
+            }
+
+            literal.contains("://") || literal.contains("www.") || literal.contains('@')
+        });
+
+        if !possible {
+            return ast;
+        }
+
+        options.extension.autolink = true;
+        parse_document(arena, text, options)
     }
 
     #[inline]
