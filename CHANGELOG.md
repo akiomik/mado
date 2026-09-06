@@ -21,7 +21,7 @@ parsed and therefore what gets reported.
   such as `http://localhost/x`, and a URL in square brackets, which could be a
   shortcut link. A `www.` host written without a scheme is autolinked by GFM and
   is now reported, and a URL is reported to where GFM stops linking it rather
-  than to where a scanner stops reading it (#408)
+  than to where a scanner stops reading it (#418)
 
 ## [0.3.2] - 2026-09-07
 
