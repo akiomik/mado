@@ -121,7 +121,11 @@ cd "$PROJECT_ROOT" || exit 1
 
 # A failed build is that same empty file, and `cargo run`'s status cannot be
 # told apart from mado's.
-cargo build || exit 1
+#
+# `--locked` because this measures the tree as it stands: a build that resolves
+# a newer dependency measures something else, and writes the answer into the
+# `Cargo.lock` the tree tracks on its way past.
+cargo build --locked || exit 1
 
 
 # Not gated on what they found, both returning 1 for violations, the normal
@@ -161,7 +165,7 @@ fi
 #
 # `--` because `--config` means something to cargo too, and mado takes it
 # before the subcommand.
-cargo run -- --config "$MADO_CONFIG" \
+cargo run --locked -- --config "$MADO_CONFIG" \
   check --output-format=mdl "$DOC_PATH" > "$TEMP_PATH/mado.part" < /dev/null
 rc=$?
 if [ "$rc" -gt 1 ]; then
