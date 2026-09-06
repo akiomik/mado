@@ -216,12 +216,15 @@ impl<'a> Document<'a> {
     ///
     /// A caller that answers with the literal instead is measuring what the
     /// rules measured before any of this: offsets counted off a string the
-    /// escapes are already out of, added to the column comrak reported. The one
-    /// difference is that the column is put back on the line once, for the node,
-    /// rather than once for each column reported out of it, so a `\|` written
-    /// between the start of the node and the offset is a column that stays
-    /// missing. Both are wrong about that offset either way, and neither is a
-    /// line this can read.
+    /// escapes are already out of, added to the column comrak reported.
+    /// [`Document::written_column_of`] answers with exactly that, one column at
+    /// a time, so a caller of it falls back to what it always did. A caller
+    /// taking the column of the text and adding its offsets to it — which is
+    /// what a caller searching the line has to do — gets that column put back on
+    /// the line once, for the node, rather than once for each column reported
+    /// out of it, so a `\|` written between the start of the node and the offset
+    /// is a column that stays missing. Both are wrong about that offset either
+    /// way, and neither is a line this can read.
     fn line_text<'t>(&'t self, position: Sourcepos, literal: &str) -> Option<(&'t str, usize)> {
         if position.start.line != position.end.line {
             return None;

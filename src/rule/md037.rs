@@ -70,28 +70,20 @@ impl RuleLike for MD037 {
             // NOTE: m.start and m.end start from 0, and count off `column`,
             //       which is where the text starts on the line.
             //
-            // The alternatives that begin at a start marker begin at the
-            // whitespace before it, and the ones that begin at an end marker
-            // begin at the marker, so what the match begins with says which
-            // matched. `\s` is any whitespace and not the space alone, so it is
-            // asked about as such — a tab answered for the end-marker
-            // arithmetic and put the report on the tab rather than on the
-            // marker — and the marker is that character's width along, which is
-            // two bytes for a no-break space and three for an ideographic one.
-            if let Some(space) = m
-                .as_str()
-                .chars()
-                .next()
-                .filter(|char| char.is_whitespace())
-            {
-                // When a start marker matches
-                position.start.column = column + m.start() + space.len_utf8();
-                position.end.column = column + m.end() - 1;
-            } else {
-                // When an end marker matches
-                position.start.column = column + m.start();
-                position.end.column = column + m.end() - 2;
-            }
+            // Every alternative is anchored by the whitespace on one side of
+            // the emphasis — before a start marker, after an end one — and what
+            // is reported is the emphasis. The anchor comes off whichever end
+            // carries it, and off by however wide it is: `\s` is any whitespace
+            // and not the space alone, so it is a tab, or the two bytes of a
+            // no-break space, or the three of an ideographic one. Trimming both
+            // ends is one way of saying that, the alternative that anchors an
+            // end has nothing to trim off the other.
+            let matched = m.as_str();
+            let start = m.start() + matched.len() - matched.trim_start().len();
+            let end = m.end() - (matched.len() - matched.trim_end().len());
+
+            position.start.column = column + start;
+            position.end.column = column + end - 1;
 
             let violation = self.to_violation(doc.path.clone(), position);
             violations.push(violation);
@@ -400,9 +392,23 @@ mod tests {
     }
 
     // `\s` is whatever is whitespace and not what is one byte of it, so the
-    // marker is that character's width along rather than one: a no-break space
-    // is two bytes, and a column one past its first is inside it and not a
-    // column of the line at all.
+    // anchor comes off by its own width rather than by one: a no-break space is
+    // two bytes, and a column one inside it is not a column of the line at all.
+    // This is the end marker's anchor, which is trimmed off the end.
+    #[test]
+    fn check_errors_with_multibyte_space_after_marker() -> Result<()> {
+        let text = "x** b **\u{a0}y".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 2, 1, 8)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // And this is the start marker's, which is trimmed off the start.
     #[test]
     fn check_errors_with_multibyte_space_before_marker() -> Result<()> {
         let text = "x\u{a0}** b ** y".to_owned();

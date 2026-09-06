@@ -42,7 +42,7 @@ parsed and therefore what gets reported.
   one to the left of the character it named, and one more for each further
   escape (#405)
 - MD034 and MD037: report the column an inline was written at, rather than one
-  counted off a string `CommonMark` had already resolved the escapes out of. A
+  counted off a string CommonMark had already resolved the escapes out of. A
   `\.` written earlier in the same text node moved the reported column one to
   the left of the character it named, and one more for each further escape
   (#407)

@@ -64,13 +64,15 @@ impl RuleLike for MD034 {
                 position.start.column =
                     doc.written_column_of(data.sourcepos, literal, link.start());
 
-                // The URL's last byte rather than the one after it, stepped
-                // past once it is on the line: a column is answered for by the
-                // byte the literal has at it, and the byte after the URL is not
-                // the URL's. A `\|` written there would be one the walk stops
-                // at, and the end would follow it past the URL.
-                position.end.column =
-                    doc.written_column_of(data.sourcepos, literal, link.end() - 1) + 1;
+                // The byte after the URL's last, which is the column reported,
+                // and asked for as that rather than as the last byte's column
+                // stepped past. A step of one is the width of that byte, which
+                // is one only where it is a single byte written as itself: `é`
+                // is two, and a byte written as `\_` is at the column of the
+                // backslash and two wide. An offset past the end of the literal
+                // is the column after the node, which is where a URL that runs
+                // to the end of its text belongs.
+                position.end.column = doc.written_column_of(data.sourcepos, literal, link.end());
 
                 let violation = self.to_violation(doc.path.clone(), position);
                 violations.push(violation);
@@ -299,6 +301,36 @@ mod tests {
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 26)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // The byte after the URL is asked for as that: a URL ending at an escape
+    // ends at the byte the escape guards, which is at the column of its
+    // backslash and two columns wide, and one ending at a multibyte character
+    // is that character's width along.
+    #[test]
+    fn check_errors_with_escape_at_end_of_url() -> Result<()> {
+        let text = "see http://www.example.com/foo\\_ now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 33)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_multibyte_at_end_of_url() -> Result<()> {
+        let text = "see http://www.example.com/f\u{e9}\u{e9} now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 33)))];
         assert_eq!(actual, expected);
         Ok(())
     }
