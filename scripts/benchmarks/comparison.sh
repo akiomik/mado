@@ -89,7 +89,11 @@ done
 
 # Unchecked, a compile error leaves the previous `target/release/mado` in place
 # for hyperfine to time and report as this tree's number.
-cargo build --release || exit 1
+#
+# `--locked` because a benchmark is a number about this tree: a build that
+# resolves a newer dependency times something else, and writes the answer into
+# the `Cargo.lock` the tree tracks on its way past.
+cargo build --locked --release || exit 1
 
 # And that it landed where hyperfine will look: `CARGO_TARGET_DIR`, a
 # `build.target-dir` in the cargo config, or a configured target triple all put
