@@ -4,7 +4,7 @@ COMMAND="mado"
 # The release published alongside this version of the action. The `version`
 # input overrides it, because a version bump names its release before the tag
 # that creates it exists.
-DEFAULT_VERSION="v0.3.1"
+DEFAULT_VERSION="v0.3.2"
 VERSION="${INPUT_VERSION:-$DEFAULT_VERSION}"
 # This ends up in a path and a URL, and a workflow can wire the input to
 # anything, so accept only something shaped like one of our tags.
