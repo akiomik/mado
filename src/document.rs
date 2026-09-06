@@ -564,7 +564,13 @@ mod tests {
     // second parse wherever it is written, link text included: comrak refuses
     // an autolink inside brackets but counts its way out of them on any `]`,
     // which the three nested rows are here for. And the markers that only look
-    // like markers are owed nothing.
+    // like markers are owed nothing — the upper-case pair among them because
+    // comrak matches both `www.` and the scheme case-sensitively, which the
+    // markers here are written the same way. cmark-gfm matches the scheme with
+    // `strncasecmp` and comrak does not, so the second row is a divergence
+    // rather than a rule; it is here to fail if comrak ever closes it while the
+    // guard's `://` — which has no letters in it and so cannot notice — carries
+    // on saying the document is its own answer.
     #[test]
     fn autolink_ast_is_ast_only_when_the_trees_agree() -> Result<()> {
         let texts = [
@@ -594,6 +600,8 @@ mod tests {
             (r"see http://ex\-ample.com/ now", false),
             ("see http:// now", false),
             ("see wwwexample now", true),
+            ("see WWW.EXAMPLE.COM now", true),
+            ("see HTTP://WWW.EXAMPLE.COM/ now", false),
             ("see a@ now", false),
             ("see nothing at all now", true),
             (

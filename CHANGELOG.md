@@ -21,6 +21,11 @@ parsed and therefore what gets reported.
   a link a reader is handed. A `mailto:foo@example.com` is still reported, and
   from the `mailto:` rather than from the address, that being where GFM starts
   the link (#418)
+- **Breaking:** MD034 no longer reports a bare URL whose scheme is not written
+  in lower case, such as `HTTP://www.example.com/`. GitHub does autolink one, so
+  this is a report lost rather than a false positive dropped: comrak, mado's
+  parser, compares the scheme case-sensitively where cmark-gfm does not. #420
+  tracks it (#418)
 
 ### Fixed
 

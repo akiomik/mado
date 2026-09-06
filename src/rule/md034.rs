@@ -313,6 +313,42 @@ mod tests {
         Ok(())
     }
 
+    // GFM matches `www.` case-sensitively — cmark-gfm compares it with `memcmp`
+    // — so a host written `Www.` is not one it autolinks. markdownlint reports
+    // this one; what it links is the question the rule asks, and nothing is
+    // linked here.
+    #[test]
+    fn check_no_errors_with_upper_case_www() -> Result<()> {
+        let text = "For more information, see Www.example.com.".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // A scheme written in any case is one cmark-gfm autolinks, comparing it
+    // with `strncasecmp`, and comrak compares it case-sensitively instead. This
+    // is the report mado loses to that, and #420 is where it is tracked: the
+    // rule reports the links its parser makes, and this is not one of them.
+    // Failing here is comrak having closed the gap, and the fix is to expect a
+    // violation rather than to work around it.
+    #[test]
+    fn check_no_errors_with_upper_case_scheme() -> Result<()> {
+        let text = "For more information, see HTTP://www.example.com/.".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // An image's alt text is square brackets too, and GFM autolinks nothing
     // inside them: the alt text of the rendered image is the URL as text, and
     // no reader is handed a link to it.
