@@ -13,11 +13,11 @@ test:
     CLICOLOR_FORCE=true cargo test --locked --all-features --workspace
 
 lint:
-    cargo clippy --all-targets --all-features --workspace -- -D warnings
+    cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
     taplo lint
 
 cov:
-    CLICOLOR_FORCE=true cargo llvm-cov --open
+    CLICOLOR_FORCE=true cargo llvm-cov --locked --open
 
 [linux]
 flamegraph target="scripts/benchmarks/data/gitlab":

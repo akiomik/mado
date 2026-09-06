@@ -79,7 +79,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Clippy check
-        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 
   docs:
     name: Docs
@@ -95,7 +95,7 @@ jobs:
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps --document-private-items --all-features --workspace
+        run: cargo doc --locked --no-deps --document-private-items --all-features --workspace
 
   coverage:
     name: Code Coverage
@@ -115,7 +115,7 @@ jobs:
           tool: cargo-llvm-cov
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --locked --all-features --workspace --lcov --output-path lcov.info
         env:
           CLICOLOR_FORCE: true
           TZ: 'Asia/Tokyo'
