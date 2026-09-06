@@ -91,9 +91,10 @@ update-winget-hash-all: update-winget-hash-windows-amd64
 # schema's `date` format admits, and a heading written any other way does not
 # say which day it means.
 #
-# `update-winget` reads the date through this recipe, before the checksums are
-# downloaded, so a changelog that cannot answer stops it before anything has
-# been written to the manifest.
+# `update-winget` reads the date through this recipe, and checks the manifest
+# still has a `ReleaseDate` line to stamp, before the checksums are downloaded.
+# Whatever cannot be answered stops the recipe while the manifest is still
+# untouched, rather than after the version and the checksum have gone in.
 [private]
 winget-release-date:
     @echo 'Reading the release date for {{ version }} from CHANGELOG.md...'
@@ -107,17 +108,17 @@ winget-release-date:
            echo 'CHANGELOG.md dates `## [{{ version }}]` more than once' >&2; \
            exit 1; \
          fi
+    @if ! grep -q '^ReleaseDate: ' pkg/winget/mado.yml; then \
+         echo 'pkg/winget/mado.yml has no ReleaseDate line to stamp' >&2; \
+         exit 1; \
+       fi
 
 update-winget: winget-release-date update-winget-hash-all
     @echo 'Updating pkg/winget/mado.yml for {{ version }}...'
     @sed -I '' "s/{{ prev_version }}/{{ version }}/" pkg/winget/mado.yml
     @release_date=`cat {{ tempdir }}/release-date` \
       && echo "Stamping ReleaseDate as $release_date..." \
-      && sed -I '' "s/^ReleaseDate: .*/ReleaseDate: $release_date/" pkg/winget/mado.yml \
-      && if ! grep -q "^ReleaseDate: $release_date$" pkg/winget/mado.yml; then \
-           echo 'pkg/winget/mado.yml has no ReleaseDate line to stamp' >&2; \
-           exit 1; \
-         fi
+      && sed -I '' "s/^ReleaseDate: .*/ReleaseDate: $release_date/" pkg/winget/mado.yml
 
 [private]
 nix-hash version target:
