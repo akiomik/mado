@@ -620,15 +620,13 @@ mod tests {
             let mut extended = String::new();
             format_html(reference, &options, &mut extended).into_diagnostic()?;
 
-            assert_eq!(
-                ptr::eq(doc.ast, doc.autolink_ast),
-                own_answer,
-                "{text:?} was its own answer: {own_answer}"
-            );
-            assert!(
-                !(own_answer && plain != extended),
-                "{text:?} was handed back as its own answer and the extension changes it"
-            );
+            assert_eq!(ptr::eq(doc.ast, doc.autolink_ast), own_answer, "{text:?}");
+
+            // The half that is correctness: what was handed back as its own
+            // answer has to be a document the extension changes nothing about.
+            if own_answer {
+                assert_eq!(plain, extended, "{text:?}");
+            }
         }
 
         Ok(())
