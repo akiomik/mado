@@ -84,9 +84,20 @@ update-winget-hash-windows-amd64: (update-winget-hash "mado-Windows-msvc-x86_64.
 
 update-winget-hash-all: update-winget-hash-windows-amd64
 
+# `ReleaseDate` is the date WinGet shows the installer as released on, so it has
+# to move with every version. It comes from the changelog rather than today's
+# date: this recipe runs once CD has finished, which is not always the day the
+# release is dated.
 update-winget: update-winget-hash-all
     @echo 'Updating pkg/winget/mado.yml for {{ version }}...'
     @sed -I '' "s/{{ prev_version }}/{{ version }}/" pkg/winget/mado.yml
+    @release_date=`sed -n 's/^## \[{{ version }}\] - \([0-9][0-9-]*\)$/\1/p' CHANGELOG.md` \
+      && if [ -z "$release_date" ]; then \
+           echo 'CHANGELOG.md has no dated section for {{ version }}' >&2; \
+           exit 1; \
+         fi \
+      && echo "Updating pkg/winget/mado.yml for $release_date..." \
+      && sed -I '' "s/^ReleaseDate: .*/ReleaseDate: $release_date/" pkg/winget/mado.yml
 
 [private]
 nix-hash version target:
