@@ -67,7 +67,7 @@ impl<'a> Document<'a> {
         options.extension.front_matter_delimiter = Some("---".to_owned());
         options.extension.table = true;
         let ast = parse_document(arena, &text, &options);
-        let autolink_ast = Self::parse_with_autolink(arena, &text, &mut options, ast);
+        let autolink_ast = Self::parse_with_autolink(arena, &text, &options, ast);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
         let unescaped_regions = Self::unescaped_regions(ast, &lines, &text);
 
@@ -84,20 +84,36 @@ impl<'a> Document<'a> {
     /// [`Document::autolink_ast`], parsed only where it would differ from
     /// `ast`.
     ///
-    /// A document no autolink can be found in is its own answer, and is handed
-    /// back rather than parsed a second time. comrak begins an autolink at a
-    /// `://`, a `www.` or an `@`, and only where the inline parser is reading
-    /// text: a URL written as a link's destination or inside a code span is not
-    /// text by the time it is one. So the text nodes are asked rather than the
-    /// document, and a URL inside a link is passed over, that being the one
-    /// place a text node holds a URL nothing can be made of. Whatever an
-    /// autolink is made of is text without the extension, so a document whose
-    /// text nodes hold none of the three parses the same either way — most of
-    /// them, a destination being where a URL is usually written.
+    /// A document the extension can find no autolink in parses to the same tree
+    /// either way, and `ast` is handed back rather than parsed a second time.
+    /// comrak begins an autolink at a `://`, a `www.` or an `@`, so the
+    /// question is whether the document has one of those somewhere the inline
+    /// parser would read it as text — and `ast` can be asked, because up to the
+    /// first autolink the two parses are the same parse.
+    ///
+    /// They are the same parse because the extension adds nothing but a branch
+    /// at those three, and takes `:`, `w` and `@` for special bytes to reach
+    /// it. Without it they are ordinary text, so the marker that begins the
+    /// first autolink of the extended parse is text of one node in `ast`, whole
+    /// — the two cannot part company before it, and a node cannot be split
+    /// where no construct begins. That is what makes the text nodes of `ast`
+    /// the right place to look, and it is a narrower place than the document:
+    /// a URL written as a link's destination, inside a code span or inside a
+    /// raw HTML tag is not text by the time the parser is reading it, and a
+    /// destination is where a URL is usually written.
+    ///
+    /// A text node inside a link is passed over for the same reason. comrak
+    /// refuses an autolink inside brackets, so the extended parse forms none
+    /// where `ast` has link text, and `<https://example.com>` — a text node
+    /// whose whole content is a marker — is the one place a text node holds a
+    /// URL nothing can be made of.
+    ///
+    /// `autolink_ast_is_ast_only_when_the_trees_agree` is the test that this
+    /// reasoning is comrak's behaviour and not just an account of it.
     fn parse_with_autolink(
         arena: &'a Arena<'a>,
         text: &str,
-        options: &mut Options,
+        options: &Options,
         ast: &'a AstNode<'a>,
     ) -> &'a AstNode<'a> {
         let possible = ast.descendants().any(|node| {
@@ -105,9 +121,6 @@ impl<'a> Document<'a> {
                 return false;
             };
 
-            // The text of a link is not text the extension reads, and the URL
-            // of an `<https://example.com>` is a text node holding a marker
-            // that could never begin an autolink.
             if let Some(parent) = node.parent()
                 && matches!(parent.data.borrow().value, NodeValue::Link(_))
             {
@@ -121,8 +134,11 @@ impl<'a> Document<'a> {
             return ast;
         }
 
+        // Cloned rather than taken by `&mut`, which would leave the extension
+        // on in the caller's own options for whatever it parses next.
+        let mut options = options.clone();
         options.extension.autolink = true;
-        parse_document(arena, text, options)
+        parse_document(arena, text, &options)
     }
 
     #[inline]
@@ -514,16 +530,108 @@ impl<'a> Document<'a> {
 
 #[cfg(test)]
 mod tests {
+    use core::ptr;
+
+    use comrak::format_html;
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 
     use super::*;
 
+    // `Document::parse_with_autolink` hands `ast` back for a document it reads
+    // as one the extension can find no autolink in, and MD034 walks whatever it
+    // hands back — so a document it is wrong about is one MD034 reports nothing
+    // for and says nothing about. What makes it right is an argument about
+    // comrak's inline parser rather than anything checked at the time, and this
+    // is where that argument is checked against comrak.
+    //
+    // The two parses are rendered and compared, a renderer being what says
+    // which text the extension made a link of. A document they differ on is one
+    // the second tree was owed, and handing `ast` back for it is the failure
+    // that has no symptom. The other direction is cost rather than correctness,
+    // so it is recorded per input instead of asserted over all of them: the
+    // second column is whether the document was its own answer, and the two
+    // marked `false` against an unchanged rendering are what the guard is
+    // deliberately coarse about.
+    //
+    // The inputs are the shapes the argument turns on. A marker the parser
+    // never reads as text — a destination, a code span, a raw HTML tag, an
+    // indented or fenced block — is one no autolink can be made of. A marker
+    // inside brackets is one comrak refuses, whether the brackets resolve to a
+    // link or not. A marker in prose is owed the second parse, alongside the
+    // ones that only look like markers.
     #[test]
-    fn open() {
-        let arena = Arena::new();
-        let path = Path::new("README.md");
-        assert!(Document::open(&arena, path).is_ok());
+    fn autolink_ast_is_ast_only_when_the_trees_agree() -> Result<()> {
+        let texts = [
+            ("see http://www.example.com/ now", false),
+            ("see <http://www.example.com/> now", true),
+            ("see [x](http://www.example.com/) now", true),
+            ("see [http://www.example.com/](y) now", true),
+            ("see ![http://www.example.com/](y.png) now", false),
+            ("see [http://www.example.com/] now", false),
+            ("see [x] now\n\n[x]: http://www.example.com/", true),
+            ("see `http://www.example.com/` now", true),
+            ("    http://www.example.com/", true),
+            ("```\nhttp://www.example.com/\n```", true),
+            ("see <a href=\"http://www.example.com/\">x</a> now", true),
+            ("see <div>http://www.example.com/</div> now", false),
+            ("see www.example.com now", false),
+            ("see foo@example.com now", false),
+            ("see mailto:foo@example.com now", false),
+            ("see <foo@example.com> now", true),
+            ("see [foo@example.com](y) now", true),
+            (r"see http\://www.example.com/ now", false),
+            ("see http://localhost/x now", false),
+            (r"see http://ex\_ample.com/ now", false),
+            (r"see http://ex\-ample.com/ now", false),
+            ("see http:// now", false),
+            ("see wwwexample now", true),
+            ("see a@ now", false),
+            ("see nothing at all now", true),
+            (
+                "| a | b |\n| --- | --- |\n| http://www.example.com/ | c |",
+                false,
+            ),
+            ("> http://www.example.com/", false),
+            ("- http://www.example.com/", false),
+            ("# http://www.example.com/", false),
+            ("*http://www.example.com/*", false),
+            ("see [x](y) and http://www.example.com/ now", false),
+            (
+                "see <http://a.example.com/> and http://b.example.com/ now",
+                false,
+            ),
+        ];
+
+        for (text, own_answer) in texts {
+            let arena = Arena::new();
+            let path = Path::new("test.md").to_path_buf();
+            let doc = Document::new(&arena, path, text.to_owned())?;
+
+            let mut options = Options::default();
+            options.extension.front_matter_delimiter = Some("---".to_owned());
+            options.extension.table = true;
+            let mut plain = String::new();
+            format_html(doc.ast, &options, &mut plain).into_diagnostic()?;
+
+            options.extension.autolink = true;
+            let reference_arena = Arena::new();
+            let reference = parse_document(&reference_arena, text, &options);
+            let mut extended = String::new();
+            format_html(reference, &options, &mut extended).into_diagnostic()?;
+
+            assert_eq!(
+                ptr::eq(doc.ast, doc.autolink_ast),
+                own_answer,
+                "{text:?} was its own answer: {own_answer}"
+            );
+            assert!(
+                !(own_answer && plain != extended),
+                "{text:?} was handed back as its own answer and the extension changes it"
+            );
+        }
+
+        Ok(())
     }
 
     #[test]

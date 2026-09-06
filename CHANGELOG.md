@@ -13,6 +13,15 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** MD034 no longer reports a URL whose scheme GFM does not
+  autolink. GFM autolinks `http://`, `https://` and `ftp://` and no others, so
+  `ftps://`, `file://`, `ssh://` and the rest are left alone, none of them being
+  a link a reader is handed. A `mailto:foo@example.com` is still reported, and
+  from the `mailto:` rather than from the address, that being where GFM starts
+  the link (#418)
+
 ### Fixed
 
 - MD034: report the URLs GFM autolinks, rather than every string a URL scanner

@@ -244,6 +244,57 @@ mod tests {
         Ok(())
     }
 
+    // GFM autolinks `http://`, `https://` and `ftp://` and no other scheme, so
+    // a URL written with one of the rest is text a reader is handed as text.
+    #[test]
+    fn check_no_errors_with_scheme_gfm_does_not_autolink() -> Result<()> {
+        let text = indoc! {"
+            see ftps://www.example.com/ now
+
+            see file:///tmp/x now
+
+            see ssh://www.example.com/ now
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // `ftp://` is one of the three, and is reported.
+    #[test]
+    fn check_errors_with_ftp() -> Result<()> {
+        let text = "For more information, see ftp://www.example.com/.".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 27, 1, 49)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // GFM starts an email autolink at the `mailto:` rather than at the address,
+    // and the whole of what it links is what is reported.
+    #[test]
+    fn check_errors_with_mailto_email() -> Result<()> {
+        let text = "For more information, mail mailto:foo@example.com.".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 28, 1, 50)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // An image's alt text is square brackets too, and GFM autolinks nothing
     // inside them: the alt text of the rendered image is the URL as text, and
     // no reader is handed a link to it.
