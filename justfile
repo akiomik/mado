@@ -10,7 +10,7 @@ fmt:
     taplo format
 
 test:
-    CLICOLOR_FORCE=true cargo test --all-features --workspace
+    CLICOLOR_FORCE=true cargo test --locked --all-features --workspace
 
 lint:
     cargo clippy --all-targets --all-features --workspace -- -D warnings
