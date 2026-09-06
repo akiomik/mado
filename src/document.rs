@@ -41,6 +41,17 @@ impl<'a> Document<'a> {
         let mut options = Options::default();
         options.extension.front_matter_delimiter = Some("---".to_owned());
         options.extension.table = true;
+
+        // What MD034 reports is the URL a reader is handed a link to without
+        // having asked for one, and GFM's autolink extension is what decides
+        // which text that is: `http\://example.com` and `http://localhost/x`
+        // are both URLs to a scanner and neither is linked, while
+        // `http://ex\-ample.com/` is linked with the backslash still in it.
+        // Asking comrak for the extension is asking the parser the rule is
+        // reporting on, rather than asking a URL scanner a question about
+        // Markdown. The links it adds are the ones the rule walks; every other
+        // rule sees the bare URLs it used to see as text wrapped in a link.
+        options.extension.autolink = true;
         let ast = parse_document(arena, &text, &options);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
         let unescaped_regions = Self::unescaped_regions(ast, &lines, &text);
@@ -93,71 +104,6 @@ impl<'a> Document<'a> {
         written.start.column = self.written_column(position.start.line, position.start.column);
         written.end.column = self.written_column(position.end.line, position.end.column);
         written
-    }
-
-    /// The column the byte at `offset` of a text node's `literal` was written
-    /// at.
-    ///
-    /// A rule that counts an offset off a literal is counting on a string
-    /// `CommonMark` has already resolved the escapes in: `\.` is two bytes on
-    /// the line and one there, so an offset past one names a column to the left
-    /// of the one it was written at, and one more for each further escape.
-    /// Adding an offset to a column is what put the report to the left of the
-    /// character it named; the offset is walked along the line here instead,
-    /// where the escapes still are, and the column comes out of the walk.
-    ///
-    /// [`Document::written_position`] is where the walk starts, because a
-    /// position from inside a table cell is measured against the unescaped cell
-    /// rather than against the line. What that corrects and what this does are
-    /// the two halves of one report: the position of the node, and the offsets
-    /// counted off inside it.
-    ///
-    /// An offset past the end of the literal answers with the column after the
-    /// node, which is where a caller naming the byte after a span lands.
-    ///
-    /// Where the line is not the literal's source, `line_text` says so, and the
-    /// offset is added to the column comrak reported and that column put back
-    /// on the line — which is what the rules did before any of this, and is
-    /// wrong by whatever escapes the offset passed.
-    #[inline]
-    #[must_use]
-    pub fn written_column_of(&self, position: Sourcepos, literal: &str, offset: usize) -> usize {
-        match self.line_text(position, literal) {
-            Some((text, column)) => column + Self::written_offset(text, offset),
-            None => self.written_column(position.start.line, position.start.column + offset),
-        }
-    }
-
-    /// The offset into `written` of the byte its literal has at `offset`.
-    ///
-    /// The two run together a character at a time, and part company only at an
-    /// escape: its backslash is a byte of the line that the literal does not
-    /// have, and the byte it guards stands there for the pair.
-    fn written_offset(written: &str, offset: usize) -> usize {
-        let mut literal_offset = 0;
-        let mut chars = written.char_indices().peekable();
-
-        while let Some((index, char)) = chars.next() {
-            if literal_offset >= offset {
-                return index;
-            }
-
-            // An escape is two bytes of the line and one of the literal, and
-            // the one is the byte it guards, which is always punctuation and so
-            // always a single byte.
-            if char == '\\'
-                && chars
-                    .peek()
-                    .is_some_and(|&(_, next)| next.is_ascii_punctuation())
-            {
-                chars.next();
-                literal_offset += 1;
-            } else {
-                literal_offset += char.len_utf8();
-            }
-        }
-
-        written.len()
     }
 
     /// The text `position` describes with the escapes in it masked out, and the
@@ -216,15 +162,12 @@ impl<'a> Document<'a> {
     ///
     /// A caller that answers with the literal instead is measuring what the
     /// rules measured before any of this: offsets counted off a string the
-    /// escapes are already out of, added to the column comrak reported.
-    /// [`Document::written_column_of`] answers with exactly that, one column at
-    /// a time, so a caller of it falls back to what it always did. A caller
-    /// taking the column of the text and adding its offsets to it — which is
-    /// what a caller searching the line has to do — gets that column put back on
-    /// the line once, for the node, rather than once for each column reported
-    /// out of it, so a `\|` written between the start of the node and the offset
-    /// is a column that stays missing. Both are wrong about that offset either
-    /// way, and neither is a line this can read.
+    /// escapes are already out of, added to the column comrak reported. That
+    /// column is put back on the line once, for the node, rather than once for
+    /// each column reported out of it, so a `\|` written between the start of
+    /// the node and the offset is a column that stays missing. It is the wrong
+    /// answer for that offset, and it is the only one left where this cannot
+    /// read the line.
     fn line_text<'t>(&'t self, position: Sourcepos, literal: &str) -> Option<(&'t str, usize)> {
         if position.start.line != position.end.line {
             return None;
@@ -733,29 +676,10 @@ mod tests {
         Ok(())
     }
 
-    // The offset is walked along the line, where the escapes still are, so the
-    // column comes out one to the right of the literal's own for each one the
-    // walk passed. An offset that lands on an escape answers with the backslash
-    // it begins at, which is where the character was written.
-    #[test]
-    fn written_column_of_a_line() -> Result<()> {
-        let text = r"x \. y z".to_owned();
-        let arena = Arena::new();
-        let path = Path::new("test.md").to_path_buf();
-        let doc = Document::new(&arena, path, text)?;
-        let position = Sourcepos::from((1, 1, 1, 8));
-        assert_eq!(doc.written_column_of(position, "x . y z", 0), 1);
-        assert_eq!(doc.written_column_of(position, "x . y z", 2), 3);
-        assert_eq!(doc.written_column_of(position, "x . y z", 6), 8);
-        Ok(())
-    }
-
     // comrak measures a position from inside a table cell against the unescaped
-    // cell, so the columns are put back on the line before the walk starts —
-    // and the walk takes it from there, the cell's `\|` being an escape like
-    // any other on the line.
+    // cell, so the columns are put back on the line before the slice is taken.
     #[test]
-    fn written_column_of_a_table_cell() -> Result<()> {
+    fn written_text_without_escapes_of_a_table_cell() -> Result<()> {
         let text = indoc! {r"
             | a | b |
             | --- | --- |
@@ -765,78 +689,55 @@ mod tests {
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
-        let position = Sourcepos::from((3, 3, 3, 7));
-        assert_eq!(doc.written_column_of(position, "x|y w", 0), 3);
-        assert_eq!(doc.written_column_of(position, "x|y w", 1), 4);
-        assert_eq!(doc.written_column_of(position, "x|y w", 4), 8);
-
-        // The byte after the node, which is where a caller naming the byte
-        // after a span lands.
-        assert_eq!(doc.written_column_of(position, "x|y w", 5), 9);
-        Ok(())
-    }
-
-    // `\\|` is an escaped backslash and then a pipe, and the walk takes the
-    // run as `CommonMark` resolves it: two bytes for the one, and the pipe on
-    // its own.
-    #[test]
-    fn written_column_of_an_escaped_backslash() -> Result<()> {
-        let text = r"a \\| b".to_owned();
-        let arena = Arena::new();
-        let path = Path::new("test.md").to_path_buf();
-        let doc = Document::new(&arena, path, text)?;
-        let position = Sourcepos::from((1, 1, 1, 7));
-        assert_eq!(doc.written_column_of(position, r"a \| b", 3), 5);
-        assert_eq!(doc.written_column_of(position, r"a \| b", 5), 7);
+        let actual = doc.written_text_without_escapes(Sourcepos::from((3, 3, 3, 7)), "x|y w");
+        assert_eq!(actual, (Cow::Owned("xxxy w".to_owned()), 3));
         Ok(())
     }
 
     // comrak measures a node from the byte its literal begins with, and a byte
     // written escaped is a column further along than the escape that wrote it.
     // Without the backslash the slice is the literal's twin rather than its
-    // source — here it is that byte for byte — and the escapes in the rest of
-    // it are read a byte early.
+    // source — here it is that byte for byte — and the escape at the start is
+    // not there to be masked at all.
     #[test]
-    fn written_column_of_a_line_beginning_with_an_escape() -> Result<()> {
-        let text = r"\\.x y".to_owned();
+    fn written_text_without_escapes_of_a_line_beginning_with_an_escape() -> Result<()> {
+        let text = r"\*x y".to_owned();
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
 
-        // comrak reports 1:2 for a node beginning at the escaped backslash,
-        // which is written at columns 1 and 2.
-        let position = Sourcepos::from((1, 2, 1, 6));
-        assert_eq!(doc.written_column_of(position, r"\.x y", 0), 1);
-        assert_eq!(doc.written_column_of(position, r"\.x y", 1), 3);
-        assert_eq!(doc.written_column_of(position, r"\.x y", 4), 6);
+        // comrak reports 1:2 for a node beginning at the escaped marker, which
+        // is written at columns 1 and 2.
+        let actual = doc.written_text_without_escapes(Sourcepos::from((1, 2, 1, 5)), "*x y");
+        assert_eq!(actual, (Cow::Owned("xxx y".to_owned()), 1));
         Ok(())
     }
 
     // A position that names two lines describes no slice of either, one
     // reaching past the end of its line describes none of it, and one starting
     // at a line or a column of zero indexes nothing at all. None of them is a
-    // line to walk, so the offset is added to the column comrak reported.
+    // line to read, so the literal answers for itself.
     #[test]
-    fn written_column_of_no_line() -> Result<()> {
+    fn written_text_without_escapes_of_no_line() -> Result<()> {
         let text = "x y\nz w".to_owned();
         let arena = Arena::new();
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
         assert_eq!(
-            doc.written_column_of(Sourcepos::from((1, 1, 2, 3)), "x y z w", 2),
-            3
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 2, 3)), "x y z w"),
+            (Cow::Borrowed("x y z w"), 1)
         );
         assert_eq!(
-            doc.written_column_of(Sourcepos::from((1, 1, 1, 4)), "x y", 2),
-            3
+            doc.written_text_without_escapes(Sourcepos::from((1, 1, 1, 4)), "x y"),
+            (Cow::Borrowed("x y"), 1)
         );
         assert_eq!(
-            doc.written_column_of(Sourcepos::from((3, 1, 3, 1)), "v", 0),
-            1
+            doc.written_text_without_escapes(Sourcepos::from((3, 1, 3, 1)), "v"),
+            (Cow::Borrowed("v"), 1)
         );
         assert_eq!(
-            doc.written_column_of(Sourcepos::from((0, 0, 0, 0)), "x y", 1),
-            1
+            doc.written_text_without_escapes(Sourcepos::from((0, 0, 0, 0)), "x y"),
+            (Cow::Borrowed("x y"), 0)
         );
         Ok(())
     }
@@ -845,9 +746,9 @@ mod tests {
     // from: comrak measures the inlines after one that spans two lines from a
     // line behind, and the slice is then some other text of the document
     // entirely. Reading it back as the literal's source is what tells the two
-    // apart, and the column comrak reported answers where it is not.
+    // apart, and the literal answers where it is not.
     #[test]
-    fn written_column_of_a_line_that_is_not_the_source() -> Result<()> {
+    fn written_text_without_escapes_of_a_line_that_is_not_the_source() -> Result<()> {
         let text = indoc! {"
             a [b](
             https://www.example.com/) c
@@ -858,25 +759,8 @@ mod tests {
         let path = Path::new("test.md").to_path_buf();
         let doc = Document::new(&arena, path, text)?;
         assert_eq!(
-            doc.written_column_of(Sourcepos::from((2, 1, 2, 13)), "will be used.", 5),
-            6
-        );
-        Ok(())
-    }
-
-    // A character reference is resolved into the literal the way an escape is,
-    // and is not one this can put back, so the line does not read back as the
-    // source and the column comrak reported answers — which is what the rules
-    // counted off before any of this, and is short by the reference.
-    #[test]
-    fn written_column_of_a_character_reference() -> Result<()> {
-        let text = "a &amp; b".to_owned();
-        let arena = Arena::new();
-        let path = Path::new("test.md").to_path_buf();
-        let doc = Document::new(&arena, path, text)?;
-        assert_eq!(
-            doc.written_column_of(Sourcepos::from((1, 1, 1, 9)), "a & b", 4),
-            5
+            doc.written_text_without_escapes(Sourcepos::from((2, 1, 2, 13)), "will be used."),
+            (Cow::Borrowed("will be used."), 1)
         );
         Ok(())
     }

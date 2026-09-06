@@ -13,6 +13,16 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Fixed
+
+- MD034: report the URLs GFM autolinks, rather than every string a URL scanner
+  accepts. `http\://www.example.com/`, which is how a URL is written so that it
+  is *not* autolinked, was reported as one; so were a host with no period in it
+  such as `http://localhost/x`, and a URL in square brackets, which could be a
+  shortcut link. A `www.` host written without a scheme is autolinked by GFM and
+  is now reported, and a URL is reported to where GFM stops linking it rather
+  than to where a scanner stops reading it (#408)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added
