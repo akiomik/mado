@@ -99,10 +99,14 @@ winget-release-date:
     @echo 'Reading the release date for {{ version }} from CHANGELOG.md...'
     @sed -n 's/^## \[{{ version }}\] - \([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)$/\1/p' CHANGELOG.md \
       > {{ tempdir }}/release-date
-    @if [ ! -s {{ tempdir }}/release-date ]; then \
-         echo 'CHANGELOG.md has no `## [{{ version }}] - YYYY-MM-DD` section' >&2; \
-         exit 1; \
-       fi
+    @dates=`wc -l < {{ tempdir }}/release-date` \
+      && if [ "$dates" -eq 0 ]; then \
+           echo 'CHANGELOG.md has no `## [{{ version }}] - YYYY-MM-DD` section' >&2; \
+           exit 1; \
+         elif [ "$dates" -gt 1 ]; then \
+           echo 'CHANGELOG.md dates `## [{{ version }}]` more than once' >&2; \
+           exit 1; \
+         fi
 
 update-winget: winget-release-date update-winget-hash-all
     @echo 'Updating pkg/winget/mado.yml for {{ version }}...'
