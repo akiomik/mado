@@ -335,6 +335,23 @@ mod tests {
         Ok(())
     }
 
+    // comrak measures a node from the byte its literal begins with, and here
+    // that byte was written as `\\`, which is a column earlier than comrak
+    // reports. The slice is taken from the backslash, or the escapes after it
+    // are read a byte early and the URL lands a column to the right.
+    #[test]
+    fn check_errors_with_escape_at_start_of_node() -> Result<()> {
+        let text = "\\\\.x http://www.example.com/ y".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 6, 1, 29)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // An escape written into the path is resolved out of the literal like any
     // other, and the walk puts its two columns back.
     #[test]

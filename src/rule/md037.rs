@@ -376,6 +376,47 @@ mod tests {
         Ok(())
     }
 
+    // comrak measures a node from the byte its literal begins with, so a node
+    // beginning with an escape is reported from the byte the escape wrote and
+    // not from the backslash. Taking the slice from the backslash is what keeps
+    // the escapes after it from being read a byte early — and here it is what
+    // keeps a real marker from being masked as an escaped one, the `\\` of `\\\\`
+    // having been read as the escape of the `*` after it.
+    #[test]
+    fn check_errors_with_escape_at_start_of_node() -> Result<()> {
+        let text = r"\\* a * b".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 3, 1, 7)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // And a node beginning at an escaped marker is reported from the marker, so
+    // the backslash that escaped it is outside the columns comrak gives and the
+    // mask cannot see it there either. `* a * b` is one unpaired marker and an
+    // escaped one, which is no emphasis at all.
+    #[test]
+    fn check_no_errors_with_escaped_marker_at_start_of_node() -> Result<()> {
+        let text = indoc! {r"
+            `c`\* a * b
+
+            **z**\* a * b
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // The regex anchors a start marker to `\s`, which is a tab as much as a
     // space, and the report belongs on the marker either way.
     #[test]

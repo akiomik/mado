@@ -235,13 +235,23 @@ impl<'a> Document<'a> {
         // A line and a column are counted from one, and an index from zero, so
         // a position that starts at either's zero indexes nothing at all.
         let index = written.start.line.checked_sub(1)?;
-        let start = written.start.column.checked_sub(1)?;
-        let text = self
-            .lines
-            .get(index)
-            .and_then(|line| line.get(start..written.end.column))?;
+        let mut start = written.start.column.checked_sub(1)?;
+        let line = self.lines.get(index)?;
 
-        Self::is_source_of(text, literal).then_some((text, written.start.column))
+        // comrak measures a node from the byte its literal begins with, and a
+        // byte written escaped is a column further along than the escape that
+        // wrote it. The backslash is the node's own — nothing else can end on
+        // one, an inline ending in a backtick, a bracket, a marker or a `>` —
+        // and without it the slice is the literal's twin rather than its
+        // source: the escapes in the rest of it are read one byte early, and
+        // the escape at the start is not there to be read at all.
+        if start > 0 && line.as_bytes().get(start - 1) == Some(&b'\\') {
+            start -= 1;
+        }
+
+        let text = line.get(start..written.end.column)?;
+
+        Self::is_source_of(text, literal).then_some((text, start + 1))
     }
 
     /// `written` with the escapes in it masked out, a byte for a byte.
@@ -778,6 +788,27 @@ mod tests {
         let position = Sourcepos::from((1, 1, 1, 7));
         assert_eq!(doc.written_column_of(position, r"a \| b", 3), 5);
         assert_eq!(doc.written_column_of(position, r"a \| b", 5), 7);
+        Ok(())
+    }
+
+    // comrak measures a node from the byte its literal begins with, and a byte
+    // written escaped is a column further along than the escape that wrote it.
+    // Without the backslash the slice is the literal's twin rather than its
+    // source — here it is that byte for byte — and the escapes in the rest of
+    // it are read a byte early.
+    #[test]
+    fn written_column_of_a_line_beginning_with_an_escape() -> Result<()> {
+        let text = r"\\.x y".to_owned();
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, text)?;
+
+        // comrak reports 1:2 for a node beginning at the escaped backslash,
+        // which is written at columns 1 and 2.
+        let position = Sourcepos::from((1, 2, 1, 6));
+        assert_eq!(doc.written_column_of(position, r"\.x y", 0), 1);
+        assert_eq!(doc.written_column_of(position, r"\.x y", 1), 3);
+        assert_eq!(doc.written_column_of(position, r"\.x y", 4), 6);
         Ok(())
     }
 
