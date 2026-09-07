@@ -1,16 +1,8 @@
-# taplo walks the tree itself and does not read `.gitignore`, so it formats
-# whatever a build or a setup script leaves behind — `cargo package` writes a
-# `Cargo.toml` under `target/` that cargo formatted and taplo disagrees with,
-# which is what made `taplo format --check` fail and `just fmt` rewrite it.
-# #427 has the rest.
-#
-# `**/` on each because taplo resolves a relative pattern against the directory
-# it is run in, not against this file: `target/**` misses anything nested
-# deeper than that.
-#
-# The cost, both ways round: a directory of one of these names is skipped
-# wherever in the tree it sits and nothing says so, and none of it holds from
-# inside an excluded directory.
+# taplo does not read `.gitignore`, so it formats what a build or a setup
+# script leaves behind: `cargo package` writes a `Cargo.toml` under `target/`
+# that it wants to reformat, which is #427. `**/` on each because taplo
+# resolves a relative pattern against the working directory rather than against
+# this file — and so these match a directory of that name anywhere.
 exclude = [
   "**/.git/**",
   "**/target/**",
