@@ -16,11 +16,12 @@ parsed and therefore what gets reported.
 ### Changed
 
 - **Breaking:** MD034 no longer reports a URL whose scheme GFM does not
-  autolink. GFM autolinks `http://`, `https://` and `ftp://` and no others, so
+  autolink. `http://`, `https://` and `ftp://` are the ones it does, so
   `ftps://`, `file://`, `ssh://` and the rest are left alone, none of them being
-  a link a reader is handed. A `mailto:foo@example.com` is still reported, and
-  from the `mailto:` rather than from the address, that being where GFM starts
-  the link (#418)
+  a link a reader is handed. An email address is matched apart from those and
+  carries its own two: a `mailto:foo@example.com` or `xmpp:foo@example.com` is
+  still reported, and from the scheme rather than from the address, that being
+  where GFM starts the link (#418)
 - **Breaking:** MD034 reports the URLs comrak autolinks, which is GFM as mado
   parses it, and comrak and GitHub disagree in three places. Two are reports
   lost: a scheme not written in lower case, such as `HTTP://www.example.com/`

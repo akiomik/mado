@@ -257,8 +257,10 @@ mod tests {
         Ok(())
     }
 
-    // GFM autolinks `http://`, `https://` and `ftp://` and no other scheme, so
-    // a URL written with one of the rest is text a reader is handed as text.
+    // `http://`, `https://` and `ftp://` are the schemes GFM autolinks a URL
+    // with, so a URL written with one of the rest is text a reader is handed as
+    // text. An email address is matched apart from these and carries its own
+    // two, which `check_errors_with_xmpp_email` has.
     #[test]
     fn check_no_errors_with_scheme_gfm_does_not_autolink() -> Result<()> {
         let text = indoc! {"
@@ -361,6 +363,30 @@ mod tests {
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
         let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // `xmpp:` is the other scheme an email address is written with, and GFM
+    // rewinds onto it as it does onto a `mailto:`. It is also the one that may
+    // carry a resource after the address, which the second of these has.
+    #[test]
+    fn check_errors_with_xmpp_email() -> Result<()> {
+        let text = indoc! {"
+            see xmpp:foo@example.com now
+
+            see xmpp:foo@example.com/bar now
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 5, 1, 25))),
+            rule.to_violation(path, Sourcepos::from((3, 5, 3, 29))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }

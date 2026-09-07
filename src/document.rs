@@ -656,6 +656,7 @@ mod tests {
             ("see www.example.com now", false),
             ("see foo@example.com now", false),
             ("see mailto:foo@example.com now", false),
+            ("see xmpp:foo@example.com/bar now", false),
             ("see <foo@example.com> now", false),
             ("see [foo@example.com](y) now", false),
             (r"see http\://www.example.com/ now", false),
