@@ -1,13 +1,12 @@
 extern crate alloc;
 
 use alloc::borrow::Cow;
+use core::cell::OnceCell;
+use core::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use comrak::nodes::{AstNode, NodeValue, Sourcepos};
-use core::cell::OnceCell;
-use core::fmt;
-
 use comrak::{Arena, Options, parse_document};
 use miette::IntoDiagnostic as _;
 use miette::Result;
