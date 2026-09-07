@@ -14,6 +14,21 @@ just test
 just lint
 ```
 
+`just lint`, and so `just`, needs a C++ toolchain on the machine. It lints the
+whole workspace, which reaches the fuzz target under `fuzz/` — a bin is a
+default target — and that brings `libfuzzer-sys`, whose build script compiles a
+vendored copy of libFuzzer before anything of mado's is looked at. A machine
+without one fails in `cc`, which is what that failure is about rather than
+anything in the diff being checked.
+
+`just test` does not: the fuzz target is a `[[bin]]` with `test`, `bench` and
+`doc` all `false`, so `cargo test` and `cargo doc` skip the package entirely.
+Neither does CI's coverage job, for the same reason. It is those three lines
+that spare them, not anything about how the commands are spelled.
+
+CI's Clippy job runs the same command and so has the same requirement. It
+installs `g++` for itself on a runner that does not already have one.
+
 ## Changelog
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
