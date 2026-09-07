@@ -51,7 +51,7 @@ impl RuleLike for MD034 {
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 
-        for node in doc.autolink_ast.descendants() {
+        for node in doc.autolink_ast().descendants() {
             let data = node.data.borrow();
             if !matches!(data.value, NodeValue::Link(_)) || !Self::is_bare(node, data.sourcepos) {
                 continue;
@@ -59,6 +59,10 @@ impl RuleLike for MD034 {
 
             // #405's correction, a position from inside a table cell being
             // measured against the unescaped cell rather than against the line.
+            // It corrects that and nothing else, so a position comrak measured
+            // against the wrong line comes back against the wrong line: the
+            // inlines after a link whose destination wraps are a line behind,
+            // and #423 has that.
             let mut position = doc.written_position(data.sourcepos);
 
             // The byte after the URL's last, which is the column reported, and
@@ -386,8 +390,7 @@ mod tests {
 
     // comrak unescapes a table cell before parsing its inlines, so the columns
     // it reports from inside one are short a byte for every `\|` written before
-    // them. `written_position` puts those bytes back, and the link is reported
-    // at the columns it was written at.
+    // them. `written_position` puts those bytes back.
     #[test]
     fn check_errors_with_escaped_pipe_in_table() -> Result<()> {
         let text = indoc! {r"

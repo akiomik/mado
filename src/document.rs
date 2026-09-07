@@ -5,19 +5,24 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use comrak::nodes::{AstNode, NodeValue, Sourcepos};
+use core::cell::OnceCell;
+use core::fmt;
+
 use comrak::{Arena, Options, parse_document};
 use miette::IntoDiagnostic as _;
 use miette::Result;
 use rustc_hash::FxHashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct Document<'a> {
     pub path: PathBuf,
     pub ast: &'a AstNode<'a>,
 
     /// The same document parsed with GFM's autolink extension on, which MD034
-    /// walks and no other rule does.
+    /// walks and no other rule does. Taken on the first ask and not before:
+    /// every other rule reads `ast`, so a run without MD034 in it never parses
+    /// twice. [`Document::autolink_ast`] is the ask.
     ///
     /// What MD034 reports is a URL a reader is handed a link to without anyone
     /// having written a link around it, and the autolink extension is what
@@ -38,7 +43,13 @@ pub struct Document<'a> {
     /// This is [`Document::ast`] itself where the two would be the same tree,
     /// which is most documents: a URL is usually written as a link's
     /// destination, and no autolink can be made out of one.
-    pub autolink_ast: &'a AstNode<'a>,
+    autolink_ast: OnceCell<&'a AstNode<'a>>,
+
+    /// What the second parse takes, kept for as long as it might be asked for.
+    /// The arena is the one `ast` was built in, so both trees live as long as
+    /// the document does.
+    arena: &'a Arena<'a>,
+    options: Options<'static>,
 
     pub text: String,
     pub lines: Vec<String>,
@@ -46,6 +57,25 @@ pub struct Document<'a> {
     /// The regions comrak unescaped, by the line they were written on. See
     /// [`Document::written_position`].
     unescaped_regions: FxHashMap<usize, Vec<UnescapedRegion>>,
+}
+
+// Written out because the arena cannot be derived through: it is comrak's, and
+// `typed_arena::Arena` has no `Debug`. Every field a caller could want is here,
+// and the arena is what `finish_non_exhaustive` stands for.
+impl fmt::Debug for Document<'_> {
+    #[inline]
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Document")
+            .field("path", &self.path)
+            .field("ast", &self.ast)
+            .field("autolink_ast", &self.autolink_ast)
+            .field("options", &self.options)
+            .field("text", &self.text)
+            .field("lines", &self.lines)
+            .field("unescaped_regions", &self.unescaped_regions)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A run of one line's columns that comrak unescaped the pipes of before it
@@ -67,17 +97,30 @@ impl<'a> Document<'a> {
         options.extension.front_matter_delimiter = Some("---".to_owned());
         options.extension.table = true;
         let ast = parse_document(arena, &text, &options);
-        let autolink_ast = Self::parse_with_autolink(arena, &text, &options, ast);
         let lines: Vec<_> = text.lines().map(ToOwned::to_owned).collect();
         let unescaped_regions = Self::unescaped_regions(ast, &lines, &text);
 
         Ok(Self {
             path,
             ast,
-            autolink_ast,
+            autolink_ast: OnceCell::new(),
+            arena,
+            options,
             text,
             lines,
             unescaped_regions,
+        })
+    }
+
+    /// The document parsed with GFM's autolink extension on, for MD034.
+    ///
+    /// Taken on the first ask, because MD034 is the only rule that asks and a
+    /// run it is not in should not pay for it. See the field of the same name.
+    #[inline]
+    #[must_use]
+    pub fn autolink_ast(&self) -> &'a AstNode<'a> {
+        self.autolink_ast.get_or_init(|| {
+            Self::parse_with_autolink(self.arena, &self.text, &self.options, self.ast)
         })
     }
 
@@ -534,6 +577,22 @@ mod tests {
 
     use super::*;
 
+    // The arena has no `Debug` and the derive could not reach through it, so
+    // this one is written out and is code like any other.
+    #[test]
+    fn debug_names_the_document() -> Result<()> {
+        let arena = Arena::new();
+        let path = Path::new("test.md").to_path_buf();
+        let doc = Document::new(&arena, path, "x http://www.example.com/ y".to_owned())?;
+        let debug = format!("{doc:?}");
+        assert!(debug.starts_with("Document {"), "{debug}");
+        assert!(debug.contains("test.md"), "{debug}");
+
+        // The arena is what the `..` stands for.
+        assert!(debug.ends_with(".. }"), "{debug}");
+        Ok(())
+    }
+
     #[test]
     fn open() {
         let arena = Arena::new();
@@ -564,13 +623,18 @@ mod tests {
     // second parse wherever it is written, link text included: comrak refuses
     // an autolink inside brackets but counts its way out of them on any `]`,
     // which the three nested rows are here for. And the markers that only look
-    // like markers are owed nothing — the upper-case pair among them because
-    // comrak matches both `www.` and the scheme case-sensitively, which the
-    // markers here are written the same way. cmark-gfm matches the scheme with
-    // `strncasecmp` and comrak does not, so the second row is a divergence
-    // rather than a rule; it is here to fail if comrak ever closes it while the
-    // guard's `://` — which has no letters in it and so cannot notice — carries
-    // on saying the document is its own answer.
+    // like markers are owed nothing.
+    //
+    // `WWW.EXAMPLE.COM` is among those, and is the row that guards the guard.
+    // `literal.contains("www.")` is written in lower case, which is right only
+    // for as long as comrak matches `www.` in lower case — cmark-gfm compares
+    // it with `memcmp` and comrak with `starts_with`, so the two agree today.
+    // Were comrak to stop, the extended parse would link this and the plain one
+    // would not, while the guard carried on calling the document its own
+    // answer: which is the assertion below, and it would fail. The scheme has
+    // no such row to spare, `://` having no letters in it for a case to differ
+    // in; `HTTP://WWW.EXAMPLE.COM/` is here to be parsed twice and linked by
+    // neither, and #420 is what fails when comrak closes that one.
     #[test]
     fn autolink_ast_is_ast_only_when_the_trees_agree() -> Result<()> {
         let texts = [
@@ -637,7 +701,7 @@ mod tests {
             let mut extended = String::new();
             format_html(reference, &options, &mut extended).into_diagnostic()?;
 
-            assert_eq!(ptr::eq(doc.ast, doc.autolink_ast), own_answer, "{text:?}");
+            assert_eq!(ptr::eq(doc.ast, doc.autolink_ast()), own_answer, "{text:?}");
 
             // The half that is correctness: what was handed back as its own
             // answer has to be a document the extension changes nothing about.
