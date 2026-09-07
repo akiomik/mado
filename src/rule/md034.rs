@@ -172,9 +172,12 @@ mod tests {
         Ok(())
     }
 
-    // A domain is segments separated by periods and GFM asks for at least one,
-    // so a host with no period in it is not one it autolinks, however much of a
-    // URL it is to a scanner.
+    // A period is asked of a `www.` host and not of a scheme'd one — cmark-gfm
+    // passes `allow_short` for the second and not the first — so GFM autolinks
+    // this and mado no longer reports it. comrak asks a period of both, and
+    // #421 is where that is tracked. #408's table has this row the other way
+    // round, which is how it was acted on before it was checked. Failing here
+    // is comrak having closed the gap, and the fix is to expect a violation.
     #[test]
     fn check_no_errors_with_domain_without_period() -> Result<()> {
         let text = "For more information, see http://localhost/x.".to_owned();
@@ -295,11 +298,14 @@ mod tests {
         Ok(())
     }
 
-    // comrak refuses an autolink inside brackets and counts its way out of them
-    // on any `]`, so the URL after the `]` of a nested pair is inside link text
-    // and autolinked both — and the autolink runs to the next space, taking the
-    // `](y)` that would have closed the link with it. What is reported is the
-    // link GFM makes, whether or not the document has another URL elsewhere.
+    // GFM refuses an autolink anywhere inside brackets, asking the bracket stack
+    // rather than a flag, so this is one link with a URL in its text and none of
+    // it is bare. comrak asks a `bool` that the inner `]` clears, autolinks
+    // through the outer link, and swallows the `](y)` that would have closed it.
+    // This is the report mado gains to that, and #422 tracks it. It is pinned
+    // rather than worked around for the same reason as #420 and #421: the rule
+    // reports the links its parser makes. Failing here is comrak having closed
+    // the gap, and the fix is to expect no violation.
     #[test]
     fn check_errors_with_bare_url_after_nested_brackets() -> Result<()> {
         let text = "see [a [b] http://x.example.com/](y) now".to_owned();

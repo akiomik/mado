@@ -21,22 +21,25 @@ parsed and therefore what gets reported.
   a link a reader is handed. A `mailto:foo@example.com` is still reported, and
   from the `mailto:` rather than from the address, that being where GFM starts
   the link (#418)
-- **Breaking:** MD034 no longer reports a bare URL whose scheme is not written
-  in lower case, such as `HTTP://www.example.com/`. GitHub does autolink one, so
-  this is a report lost rather than a false positive dropped: comrak, mado's
-  parser, compares the scheme case-sensitively where cmark-gfm does not. #420
-  tracks it (#418)
+- **Breaking:** MD034 reports the URLs comrak autolinks, which is GFM as mado
+  parses it, and comrak and GitHub disagree in three places. Two are reports
+  lost: a scheme not written in lower case, such as `HTTP://www.example.com/`
+  (#420), and a host with no period in it, such as the `http://localhost:3000/`
+  a development setup is written with (#421) — GitHub links both. One is a
+  report gained: a URL inside link text that follows a nested `]`, as in
+  `[note [1] https://example.com/doc](/x)`, which GitHub leaves inside the link
+  (#422). Each is comrak's to close, and each is pinned by a test that fails
+  when it is (#418)
 
 ### Fixed
 
 - MD034: report the URLs GFM autolinks, rather than every string a URL scanner
   accepts. `http\://www.example.com/`, which is how a URL is written so that it
-  is *not* autolinked, was reported as one; so were a host with no period in it
-  such as `http://localhost/x`, and a URL inside square brackets — a shortcut
-  link, or an image's alt text — which GFM autolinks nothing inside of. A `www.`
-  host written without a scheme is autolinked by GFM and is now reported, and a
-  URL is reported to where GFM stops linking it rather than to where a scanner
-  stops reading it (#418)
+  is *not* autolinked, was reported as one, and so was a URL inside square
+  brackets — a shortcut link, or an image's alt text — which GFM autolinks
+  nothing inside of. A `www.` host written without a scheme is autolinked by GFM
+  and is now reported, and a URL is reported to where GFM stops linking it
+  rather than to where a scanner stops reading it (#418)
 
 ## [0.3.2] - 2026-09-07
 

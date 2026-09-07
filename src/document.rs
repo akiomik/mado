@@ -596,6 +596,7 @@ mod tests {
             ("see [foo@example.com](y) now", false),
             (r"see http\://www.example.com/ now", false),
             ("see http://localhost/x now", false),
+            ("see http://localhost:3000/admin now", false),
             (r"see http://ex\_ample.com/ now", false),
             (r"see http://ex\-ample.com/ now", false),
             ("see http:// now", false),
