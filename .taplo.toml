@@ -1,53 +1,16 @@
-# taplo walks the tree itself and knows nothing of git, so what a build or a
-# setup script leaves behind is a file it tries to format. `cargo package`
-# writes `target/package/<name>-<version>/Cargo.toml`, which cargo formats and
-# taplo does not agree with, so `taplo format --check` failed and `just fmt`
-# rewrote it — on a working tree with nothing wrong.
+# taplo walks the tree itself and does not read `.gitignore`, so it formats
+# whatever a build or a setup script leaves behind — `cargo package` writes a
+# `Cargo.toml` under `target/` that cargo formatted and taplo disagrees with,
+# which is what made `taplo format --check` fail and `just fmt` rewrite it.
+# #427 has the rest.
 #
-# So the generated and vendored directories are named, and everything else is
-# formatted. `.git` is walked like any other, and a tool that keeps state there
-# writes a TOML taplo would reformat. `target` is cargo's, under the workspace
-# root and under `fuzz/` in a checkout that predates `fuzz/` joining it. `tmp`
-# is `scripts/acceptance/test.sh`'s and `result` is a nix build's.
-# `node_modules` is what `scripts/benchmarks/comparison.sh` asks for with
-# `npm ci`. `gitlab` and `markdownlint` are the two checkouts the setup scripts
-# clone, named as those scripts' own `.gitignore` files name them.
+# `**/` on each because taplo resolves a relative pattern against the directory
+# it is run in, not against this file: `target/**` misses anything nested
+# deeper than that.
 #
-# Each begins `**/` because taplo resolves a relative pattern against the
-# directory it is run in, not against this file. `target/**` still matches a
-# `target` sitting directly below wherever taplo starts; what it misses is one
-# nested deeper, so from `scripts/` it would not reach
-# `benchmarks/data/gitlab/`, and `taplo format` there rewrote the vendored
-# checkouts — #427 again, one directory along. `**/` holds from anywhere at or
-# above the directory it names; run inside one — `cd target` — nothing is
-# excluded and the walk starts below the pattern. One component to each
-# pattern, for the same reason: `**/data/gitlab/**` named two and so held only
-# from at or above `data`, leaving `taplo format` in
-# `scripts/benchmarks/data/` to rewrite the checkout.
-#
-# It holds too widely, and that is the trade rather than a free win. A TOML
-# inside any directory called `.git`, `target`, `tmp`, `result`,
-# `node_modules`, `gitlab` or `markdownlint` is dropped without a word, wherever
-# it is — a fixture under `tests/` included, and `markdownlint` is a name this
-# repository already uses elsewhere.
-#
-# git is tighter about the same seven names, in two ways taplo cannot copy. The
-# root `.gitignore` anchors `/target`, `/tmp` and `/result` with a leading `/`
-# that means the repository root. And `node_modules`, `gitlab` and
-# `markdownlint` are unanchored, but each is written in a `.gitignore` that
-# sits in the directory it is meant to bound. taplo has one config for the
-# whole tree and no way to say either thing, so this is the closest it can
-# spell, not a match.
-#
-# The other cost is a generated directory the list has not learned about, and
-# that one is loud: something gets rewritten that should not have been, the
-# next time anyone runs `just fmt`.
-#
-# `[rule.schema]` below is relative to the working directory in the same way,
-# and cannot be `**/`-ed out of it: `taplo lint` from `scripts/benchmarks/`
-# looks for `scripts/benchmarks/pkg/json-schema/` and fails on a file that is
-# fine. That predates this list — `main` does it too — and nothing in the
-# config can spell a path relative to the config.
+# The cost, both ways round: a directory of one of these names is skipped
+# wherever in the tree it sits and nothing says so, and none of it holds from
+# inside an excluded directory.
 exclude = [
   "**/.git/**",
   "**/target/**",
