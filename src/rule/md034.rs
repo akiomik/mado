@@ -65,10 +65,16 @@ impl RuleLike for MD034 {
             // and #423 has that.
             let mut position = doc.written_position(data.sourcepos);
 
-            // The byte after the URL's last, which is the column reported, and
-            // asked for as that rather than as the last byte's column stepped
-            // past: `written_position` answers for a column by the character
-            // the line has at it, and the byte after the URL is not the URL's.
+            // The byte after the URL's last, which is the column this rule has
+            // reported since it was written and the only end column in the
+            // crate that is not the span's last byte. #424 is where that is to
+            // be settled; it is kept here so that a change about which text is
+            // a bare URL does not move the columns of the ones that still are.
+            //
+            // Asked for as the byte after rather than as the last byte's column
+            // stepped past: `written_position` answers for a column by the
+            // character the line has at it, and the byte after the URL is not
+            // the URL's.
             position.end.column += 1;
 
             let violation = self.to_violation(doc.path.clone(), position);
