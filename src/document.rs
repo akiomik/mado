@@ -627,9 +627,7 @@ mod tests {
             let path = Path::new("test.md").to_path_buf();
             let doc = Document::new(&arena, path, text.to_owned())?;
 
-            let mut options = Options::default();
-            options.extension.front_matter_delimiter = Some("---".to_owned());
-            options.extension.table = true;
+            let mut options = doc.options.clone();
             let mut plain = String::new();
             format_html(doc.ast, &options, &mut plain).into_diagnostic()?;
 

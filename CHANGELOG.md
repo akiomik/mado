@@ -34,16 +34,20 @@ parsed and therefore what gets reported.
   a nested `]`, as in `[note [1] https://example.com/doc](/x)`, which GitHub
   leaves inside the link (#422). Each is comrak's to close, and each is pinned
   by a test that fails when it is (#418)
+- **Breaking:** MD034 no longer reports a URL inside square brackets — a
+  shortcut link, or an image's alt text — GFM autolinking nothing inside of
+  them. This is the report a reversed link `(text)[http://www.example.com/]`
+  used to raise, and mado has no rule of its own for that typo, so it now goes
+  unreported (#418)
 
 ### Fixed
 
 - MD034: report the URLs GFM autolinks, rather than every string a URL scanner
   accepts. `http\://www.example.com/`, which is how a URL is written so that it
-  is *not* autolinked, was reported as one, and so was a URL inside square
-  brackets — a shortcut link, or an image's alt text — which GFM autolinks
-  nothing inside of. A `www.` host written without a scheme is autolinked by GFM
-  and is now reported, and a URL is reported to where GFM stops linking it
-  rather than to where a scanner stops reading it (#418)
+  is *not* autolinked, was reported as one. A `www.` host written without a
+  scheme is autolinked by GFM and is now reported, and a URL is reported to
+  where GFM stops linking it rather than to where a scanner stops reading it
+  (#418)
 
 ## [0.3.2] - 2026-09-07
 
