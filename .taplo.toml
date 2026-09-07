@@ -8,15 +8,21 @@
 # but taplo walks them all the same and they are set up by the repository's own
 # scripts. Naming where the TOMLs are settles all of it at once.
 #
-# Mirroring `.gitignore` into an `exclude` is the other way and does not fit:
-# eight ignore files across the tree, one of them
-# `scripts/benchmarks/data/gitlab/.gitignore` with 594 entries of its own.
+# Mirroring `.gitignore` into an `exclude` is the other way and does not fit.
+# The repository tracks five of them, and the setup scripts bring down two more
+# it does not: `scripts/benchmarks/data/gitlab/.gitignore` has 594 entries on
+# its own.
 #
 # The cost is that a TOML added outside these three is left to itself until the
 # list learns about it: unformatted, and — if it is a `mado.toml` — unchecked
 # against the schema below, since `lint` reads the same list. Still the smaller
 # cost. Neither is as bad as formatting somebody else's vendored manifest,
 # which is what `just fmt` did.
+#
+# Relative to where taplo is run, not to this file. From the repository root,
+# which is where `just fmt`, `just lint` and CI all start, that is the seven.
+# From a subdirectory it is whatever the globs reach from there — nothing at
+# all under `scripts/`, reported as `total=0` and a clean exit.
 include = ["*.toml", "fuzz/*.toml", "scripts/benchmarks/*.toml"]
 
 [[rule]]
