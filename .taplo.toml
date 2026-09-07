@@ -2,15 +2,20 @@
 # walking the tree. `cargo package` writes `target/package/<name>/Cargo.toml`,
 # which cargo formats and taplo does not agree with, so `taplo format --check`
 # failed and `just fmt` rewrote it — on a working tree with nothing wrong.
-# `scripts/benchmarks/node_modules` and the two vendored checkouts under
-# `scripts/*/data` are the same shape, and `.gitignore` cannot be mirrored into
-# an `exclude` here: `scripts/benchmarks/data/gitlab/.gitignore` alone runs to
-# some 600 entries, spread over seven ignore files.
 #
-# Naming where they are rather than where they are not. A TOML added somewhere
-# else goes unformatted until this list learns about it, which is the cost —
-# and the smaller one: unformatted is a thing to notice, where formatting
-# somebody else's vendored manifest is a thing to undo.
+# That is the one that has bitten. `scripts/benchmarks/node_modules` and the
+# vendored checkouts under `scripts/*/data` hold no TOML today and so have not,
+# but taplo walks them all the same and they are set up by the repository's own
+# scripts. Naming where the TOMLs are settles all of it at once.
+#
+# Mirroring `.gitignore` into an `exclude` is the other way and does not fit:
+# eight ignore files across the tree, one of them
+# `scripts/benchmarks/data/gitlab/.gitignore` with 594 entries of its own.
+#
+# The cost is that a TOML added outside these three goes unformatted until the
+# list learns about it — and it is the smaller cost: unformatted is a thing to
+# notice, where formatting somebody else's vendored manifest is a thing to
+# undo.
 include = ["*.toml", "fuzz/*.toml", "scripts/benchmarks/*.toml"]
 exclude = [".git/**/*"]
 
