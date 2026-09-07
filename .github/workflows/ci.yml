@@ -84,10 +84,19 @@ jobs:
       # ships one, so this asks for what is already there. Asked for anyway:
       # what the runner happens to carry is not what the job depends on, and a
       # trimmed image would fail inside `cc` with an error that reads as
-      # nothing to do with linting. #428 is the same question for the C
-      # compiler every job already needs and none of them asks for.
+      # nothing to do with linting.
+      #
+      # `update` before `install`, or the step fails in the one case it exists
+      # for. `install` picks a version out of the index the image was built
+      # with; on an image whose g++ is missing, that index is also old enough
+      # for the archive to have dropped the version it names, and the download
+      # 404s. Nothing to notice while the compiler is already there.
+      #
+      # Debian-family, like the `ubuntu-latest` this job has always run on.
+      # #428 is the same question for the C compiler every job already needs
+      # and none of them asks for, this one included until it moves.
       - name: Install a C++ toolchain for libfuzzer-sys
-        run: sudo apt-get install -y g++
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++
       - name: Clippy check
         run: cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 
