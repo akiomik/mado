@@ -1,6 +1,9 @@
-# Any of them: the workspace's own, and the one an older checkout still has
-# under `fuzz/` from when that was a workspace of its own.
-target/
+# The workspace's own, and the one an older checkout still has under `fuzz/`
+# from when that was a workspace of its own. Both anchored: unanchored, this
+# would swallow a `target` directory anywhere in the tree, and a Markdown
+# fixture inside one would go untracked and unlinted without saying so.
+/target/
+/fuzz/target/
 flamegraph.svg
 /tmp
 /result

@@ -78,6 +78,12 @@ jobs:
           toolchain: "1.91.1"
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # `--all-targets` reaches the fuzz target, which brings `libfuzzer-sys`,
+      # whose build script compiles a vendored libFuzzer. So this job needs a
+      # C++ compiler where the others do not, and has one because
+      # `ubuntu-latest` ships it rather than because anything here asks. A
+      # runner without one fails inside `cc`, which reads as nothing to do with
+      # the lint; install `g++` here if that ever happens.
       - name: Clippy check
         run: cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 

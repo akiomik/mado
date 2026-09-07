@@ -25,6 +25,10 @@ diff being checked.
 `doc` all `false`, so `cargo test` and `cargo doc` leave the package alone
 entirely. Neither does CI's coverage job, for the same reason.
 
+CI's Clippy job runs the same command and so has the same requirement. It
+passes because `ubuntu-latest` ships a C++ compiler, not because the job asks
+for one.
+
 ## Changelog
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
