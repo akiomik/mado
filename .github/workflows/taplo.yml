@@ -17,7 +17,14 @@ jobs:
           version: "0.9.3"
       # The TOMLs this repository owns rather than every one in the tree: taplo
       # walks it itself and asks git nothing, and a job that built anything
-      # first would be checking cargo's output too. See the `fmt` recipe in the
-      # justfile, which asks the same question.
+      # first would be checking cargo's output too. The `fmt` recipe in the
+      # justfile asks the same question; it has its own copy because nothing
+      # here installs `just`.
+      #
+      # `shell: bash` for the `-o pipefail` it brings. The default is `bash -e`
+      # without it, and a `git ls-files` that failed — no repository, a bad
+      # index — would leave `xargs -r` nothing to do and this step green having
+      # checked no files at all.
       - name: Run Taplo
+        shell: bash
         run: git ls-files -z --cached --others --exclude-standard '*.toml' | xargs -0 -r taplo format --check
