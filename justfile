@@ -4,17 +4,24 @@ tempdir := `mktemp -d`
 
 default: fmt test lint
 
+# taplo walks the tree itself and asks git nothing, so pointing it at the
+# repository is how `just fmt` came to rewrite the `Cargo.toml` that `cargo
+# package` leaves under `target/`. git is asked instead: tracked TOMLs, plus any
+# a new one that is not ignored, which is a file added but not yet staged.
+# Mirroring `.gitignore` into `.taplo.toml` was the other way and cannot be
+# done — `scripts/benchmarks/data/gitlab/.gitignore` alone runs to some 600
+# entries.
 fmt:
     cargo fmt --all --check
     nix fmt flake.nix
-    taplo format
+    git ls-files -z --cached --others --exclude-standard '*.toml' | xargs -0 -r taplo format
 
 test:
     CLICOLOR_FORCE=true cargo test --locked --all-features --workspace
 
 lint:
     cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
-    taplo lint
+    git ls-files -z --cached --others --exclude-standard '*.toml' | xargs -0 -r taplo lint
 
 cov:
     CLICOLOR_FORCE=true cargo llvm-cov --locked --open
