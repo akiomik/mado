@@ -4,27 +4,31 @@
 # taplo does not agree with, so `taplo format --check` failed and `just fmt`
 # rewrote it — on a working tree with nothing wrong.
 #
-# So the generated and vendored roots are named, and everything else is
-# formatted. `target` and `fuzz/target` are cargo's, the second left behind by
-# checkouts that predate `fuzz/` joining the workspace; `tmp` is
-# `scripts/acceptance/test.sh`'s and `result` is a nix build's; `scripts/*/data`
-# holds the two checkouts the setup scripts clone, one of them a GitLab tree
-# whose own `.gitignore` runs to 594 entries; `node_modules` is what
-# `scripts/benchmarks/comparison.sh` asks for with `npm ci`.
+# So the generated and vendored directories are named, and everything else is
+# formatted. `target` is cargo's, under the workspace root and under `fuzz/` in
+# a checkout that predates `fuzz/` joining it; `tmp` is
+# `scripts/acceptance/test.sh`'s and `result` is a nix build's; `node_modules`
+# is what `scripts/benchmarks/comparison.sh` asks for with `npm ci`; `gitlab`
+# and `markdownlint` are the two checkouts the setup scripts clone, and are the
+# names those scripts' own `.gitignore` files use.
 #
-# Naming these rather than the places the repository's own TOMLs live, which
-# was the other way round and is worse: an allowlist that has not learned about
-# a new file leaves it unformatted and, for a `mado.toml`, unchecked against the
-# schema below — quietly, and from a subdirectory it would collect nothing at
-# all. A generated directory this list has not learned about fails the way #427
-# did instead: loudly, the next time anyone runs `just fmt`.
+# Each begins `**/` because taplo resolves a relative pattern against the
+# directory it is run in, not against this file. Written as `target/**` they
+# match nothing from a subdirectory, and `taplo format` there rewrites the
+# vendored checkouts — #427 again, one directory along. With `**/` the six hold
+# from anywhere, which is more than the tree walk they replaced managed.
+#
+# The cost is that the list has to learn about a new generated directory. When
+# it has not, the failure is #427: something gets rewritten that should not
+# have been, the next time anyone runs `just fmt`. Loud, unlike an allowlist
+# that has not learned about a new source file and simply stops checking it.
 exclude = [
-  "target/**",
-  "fuzz/target/**",
-  "tmp/**",
-  "result/**",
-  "scripts/*/data/**",
-  "scripts/**/node_modules/**",
+  "**/target/**",
+  "**/tmp/**",
+  "**/result/**",
+  "**/node_modules/**",
+  "**/data/gitlab/**",
+  "**/data/markdownlint/**",
 ]
 
 [[rule]]
