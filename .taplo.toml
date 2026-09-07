@@ -1,30 +1,31 @@
-# The TOMLs this repository owns, rather than every one taplo can find by
-# walking the tree. `cargo package` writes
-# `target/package/<name>-<version>/Cargo.toml`,
-# which cargo formats and taplo does not agree with, so `taplo format --check`
-# failed and `just fmt` rewrote it — on a working tree with nothing wrong.
+# taplo walks the tree itself and knows nothing of git, so what a build or a
+# setup script leaves behind is a file it tries to format. `cargo package`
+# writes `target/package/<name>-<version>/Cargo.toml`, which cargo formats and
+# taplo does not agree with, so `taplo format --check` failed and `just fmt`
+# rewrote it — on a working tree with nothing wrong.
 #
-# That is the one that has bitten. `scripts/benchmarks/node_modules` and the
-# vendored checkouts under `scripts/*/data` hold no TOML today and so have not,
-# but taplo walks them all the same and they are set up by the repository's own
-# scripts. Naming where the TOMLs are settles all of it at once.
+# So the generated and vendored roots are named, and everything else is
+# formatted. `target` and `fuzz/target` are cargo's, the second left behind by
+# checkouts that predate `fuzz/` joining the workspace; `tmp` is
+# `scripts/acceptance/test.sh`'s and `result` is a nix build's; `scripts/*/data`
+# holds the two checkouts the setup scripts clone, one of them a GitLab tree
+# whose own `.gitignore` runs to 594 entries; `node_modules` is what
+# `scripts/benchmarks/comparison.sh` asks for with `npm ci`.
 #
-# Mirroring `.gitignore` into an `exclude` is the other way and does not fit.
-# The repository tracks five of them, and the setup scripts bring down two more
-# it does not: `scripts/benchmarks/data/gitlab/.gitignore` has 594 entries on
-# its own.
-#
-# The cost is that a TOML added outside these three is left to itself until the
-# list learns about it: unformatted, and — if it is a `mado.toml` — unchecked
-# against the schema below, since `lint` reads the same list. Still the smaller
-# cost. Neither is as bad as formatting somebody else's vendored manifest,
-# which is what `just fmt` did.
-#
-# Relative to where taplo is run, not to this file. From the repository root,
-# which is where `just fmt`, `just lint` and CI all start, that is the seven.
-# From a subdirectory it is whatever the globs reach from there — nothing at
-# all under `scripts/`, reported as `total=0` and a clean exit.
-include = ["*.toml", "fuzz/*.toml", "scripts/benchmarks/*.toml"]
+# Naming these rather than the places the repository's own TOMLs live, which
+# was the other way round and is worse: an allowlist that has not learned about
+# a new file leaves it unformatted and, for a `mado.toml`, unchecked against the
+# schema below — quietly, and from a subdirectory it would collect nothing at
+# all. A generated directory this list has not learned about fails the way #427
+# did instead: loudly, the next time anyone runs `just fmt`.
+exclude = [
+  "target/**",
+  "fuzz/target/**",
+  "tmp/**",
+  "result/**",
+  "scripts/*/data/**",
+  "scripts/**/node_modules/**",
+]
 
 [[rule]]
 include = ["**/mado.toml"]
