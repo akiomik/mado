@@ -1,16 +1,16 @@
 # taplo does not read `.gitignore`, so it formats what a build or a setup
 # script leaves behind: `cargo package` writes a `Cargo.toml` under `target/`
-# that it wants to reformat, which is #427. `**/` on each because taplo
-# resolves a relative pattern against the working directory rather than against
-# this file — and so these match a directory of that name anywhere.
+# that it wants to reformat, which is #427. Anchored, so that a directory of
+# the same name somewhere else — a fixture — is still checked.
 exclude = [
-  "**/.git/**",
-  "**/target/**",
-  "**/tmp/**",
-  "**/result/**",
-  "**/node_modules/**",
-  "**/gitlab/**",
-  "**/markdownlint/**",
+  ".git/**",
+  "target/**",
+  "fuzz/target/**",
+  "tmp/**",
+  "result/**",
+  "scripts/benchmarks/node_modules/**",
+  "scripts/benchmarks/data/gitlab/**",
+  "scripts/acceptance/data/markdownlint/**",
 ]
 
 [[rule]]
