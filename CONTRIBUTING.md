@@ -26,8 +26,7 @@ diff being checked.
 entirely. Neither does CI's coverage job, for the same reason.
 
 CI's Clippy job runs the same command and so has the same requirement. It
-passes because `ubuntu-latest` ships a C++ compiler, not because the job asks
-for one.
+installs `g++` for itself on a runner that does not already have one.
 
 ## Changelog
 

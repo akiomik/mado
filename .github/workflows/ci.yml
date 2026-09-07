@@ -80,23 +80,24 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # `--all-targets` reaches the fuzz target, which brings `libfuzzer-sys`,
       # whose build script compiles a vendored libFuzzer. That is a C++
-      # compiler this job needs and the others do not, and `ubuntu-latest`
-      # ships one, so this asks for what is already there. Asked for anyway:
-      # what the runner happens to carry is not what the job depends on, and a
-      # trimmed image would fail inside `cc` with an error that reads as
-      # nothing to do with linting.
+      # compiler this job needs and the others do not.
       #
-      # `update` before `install`, or the step fails in the one case it exists
-      # for. `install` picks a version out of the index the image was built
-      # with; on an image whose g++ is missing, that index is also old enough
-      # for the archive to have dropped the version it names, and the download
-      # 404s. Nothing to notice while the compiler is already there.
+      # Asked for only when it is missing. `ubuntu-latest` ships one, so the
+      # job says what it depends on without buying a network round trip for
+      # it, and a mirror having a bad minute cannot fail a lint. `update`
+      # inside the guard is not optional: `install` resolves a version out of
+      # the index the image was built with, and an image without g++ is old
+      # enough for the archive to have dropped the version it names.
       #
       # Debian-family, like the `ubuntu-latest` this job has always run on.
       # #428 is the same question for the C compiler every job already needs
       # and none of them asks for, this one included until it moves.
       - name: Install a C++ toolchain for libfuzzer-sys
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++
+        run: |
+          if ! command -v g++ > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends g++
+          fi
       - name: Clippy check
         run: cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 
