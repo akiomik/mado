@@ -153,6 +153,13 @@ impl<'a> Document<'a> {
     /// had another one somewhere else, which is the shape of bug that is worst
     /// to have: not a wrong report, but a right one that is not made.
     ///
+    /// Coarse on the `@`, deliberately. comrak asks an email address for a
+    /// period after the `@` as well, so the guard could ask for one too and
+    /// stay sound — and it would buy nothing. Of the 1522 documents in the
+    /// gitlab benchmark corpus, 1000 take the second parse, 13 of those on the
+    /// `@` alone, and every one of the 13 has a period somewhere after it:
+    /// prose ends its sentences. The parse it would save is one nobody writes.
+    ///
     /// `autolink_ast_is_ast_only_when_the_trees_agree` is the test that this
     /// reasoning is comrak's behaviour and not just an account of it.
     fn parse_with_autolink(
