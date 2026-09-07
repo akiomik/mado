@@ -2,18 +2,28 @@
 name = "mado-fuzz"
 version = "0.0.0"
 publish = false
-edition = "2021"
+edition.workspace = true
 
 [package.metadata]
 cargo-fuzz = true
 
+[lints]
+workspace = true
+
 [dependencies]
 libfuzzer-sys = "0.4"
-comrak = "0.33.0"
+comrak.workspace = true
 
 [dependencies.mado]
 path = ".."
 
+# A bin is a default target, so every `--workspace` command that builds one
+# reaches this crate and the vendored libFuzzer behind it. These three lines are
+# what spare the ones that do not: `cargo test`, `cargo doc` and the coverage
+# run skip the package entirely, and so want no C++ toolchain. A `tests/` file
+# or a lib target here would put `libfuzzer-sys` back in their graph and fail
+# all three in `cc`, which reads as nothing to do with whatever was changed.
+# `CONTRIBUTING.md` says so from the other end.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"

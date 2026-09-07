@@ -78,6 +78,39 @@ jobs:
           toolchain: "1.91.1"
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # `--workspace` reaches the fuzz target, which brings `libfuzzer-sys`,
+      # whose build script compiles a vendored libFuzzer. That is a C++
+      # compiler this job needs and the others do not: a bin is a default
+      # target, so anything that builds default targets picks it up, and
+      # `test`, `docs` and `coverage` are spared by `test`/`doc`/`bench =
+      # false` in `fuzz/Cargo.toml` rather than by anything on their own
+      # command lines. Dropping `--all-targets` from the lint below would not
+      # change that.
+      #
+      # Asked for only when it is missing. `ubuntu-latest` ships one, so the
+      # job says what it depends on without buying a network round trip for
+      # it, and a mirror having a bad minute cannot fail a lint. `update`
+      # inside the guard is not optional: `install` resolves a version out of
+      # the index the image was built with, and an image without a compiler is
+      # old enough for the archive to have dropped the version it names.
+      #
+      # The test is on `c++` because that is what runs. `cc` takes its C++
+      # tool from `$CXX`, then `clang++` where clang is preferred, and
+      # otherwise `c++`; `g++` is its answer on Solaris and illumos alone. The
+      # package is still `g++`, that being what carries a C++ compiler here. A
+      # runner where installing it leaves no `c++` behind fails the way it
+      # would have without this step, so the guard cannot cost anything it
+      # does not already save.
+      #
+      # Debian-family, like the `ubuntu-latest` this job has always run on.
+      # #428 is the same question for the C compiler every job already needs
+      # and none of them asks for, this one included until it moves.
+      - name: Install a C++ toolchain for libfuzzer-sys
+        run: |
+          if ! command -v c++ > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends g++
+          fi
       - name: Clippy check
         run: cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
 
