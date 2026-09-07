@@ -78,9 +78,14 @@ jobs:
           toolchain: "1.91.1"
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      # `--all-targets` reaches the fuzz target, which brings `libfuzzer-sys`,
+      # `--workspace` reaches the fuzz target, which brings `libfuzzer-sys`,
       # whose build script compiles a vendored libFuzzer. That is a C++
-      # compiler this job needs and the others do not.
+      # compiler this job needs and the others do not: a bin is a default
+      # target, so anything that builds default targets picks it up, and
+      # `test`, `docs` and `coverage` are spared by `test`/`doc`/`bench =
+      # false` in `fuzz/Cargo.toml` rather than by anything on their own
+      # command lines. Dropping `--all-targets` from the lint below would not
+      # change that.
       #
       # Asked for only when it is missing. `ubuntu-latest` ships one, so the
       # job says what it depends on without buying a network round trip for

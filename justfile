@@ -28,7 +28,12 @@ flamegraph target="scripts/benchmarks/data/gitlab":
     # See https://github.com/flamegraph-rs/flamegraph#dtrace-on-macos
     cargo flamegraph --root --profile bench --open -- check {{ target }}
 
+# `cargo fuzz` takes no `--locked` and forwards no cargo flags that mean it, so
+# a run whose manifests have moved rewrites the lock on its way past — the one
+# CD builds against and `check-versions.sh` reads, now that `fuzz/` shares it.
+# `cargo metadata --locked` is the same question asked first, and cheap.
 fuzz target="linter":
+    cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}
 
 [private]
