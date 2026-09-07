@@ -1,5 +1,6 @@
 # The TOMLs this repository owns, rather than every one taplo can find by
-# walking the tree. `cargo package` writes `target/package/<name>/Cargo.toml`,
+# walking the tree. `cargo package` writes
+# `target/package/<name>-<version>/Cargo.toml`,
 # which cargo formats and taplo does not agree with, so `taplo format --check`
 # failed and `just fmt` rewrote it — on a working tree with nothing wrong.
 #
