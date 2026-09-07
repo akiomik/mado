@@ -26,12 +26,18 @@
 # `scripts/benchmarks/data/` to rewrite the checkout.
 #
 # It holds too widely, and that is the trade rather than a free win. A TOML
-# inside any directory called `target`, `tmp`, `result`, `node_modules`,
-# `data/gitlab` or `data/markdownlint` is dropped without a word, wherever it
-# is — a fixture under `tests/` included. `.gitignore` refuses the same
-# looseness in `.gitignore`, and can: git anchors a leading `/` at the
-# repository root, and taplo has no way to say that. This is the closer of the
-# two to what is wanted, not a match for it.
+# inside any directory called `.git`, `target`, `tmp`, `result`,
+# `node_modules`, `gitlab` or `markdownlint` is dropped without a word, wherever
+# it is — a fixture under `tests/` included, and `markdownlint` is a name this
+# repository already uses elsewhere.
+#
+# git is tighter about the same seven names, in two ways taplo cannot copy. The
+# root `.gitignore` anchors `/target`, `/tmp` and `/result` with a leading `/`
+# that means the repository root. And `node_modules`, `gitlab` and
+# `markdownlint` are unanchored, but each is written in a `.gitignore` that
+# sits in the directory it is meant to bound. taplo has one config for the
+# whole tree and no way to say either thing, so this is the closest it can
+# spell, not a match.
 #
 # The other cost is a generated directory the list has not learned about, and
 # that one is loud: something gets rewritten that should not have been, the
