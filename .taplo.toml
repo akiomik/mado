@@ -20,13 +20,16 @@
 # `benchmarks/data/gitlab/`, and `taplo format` there rewrote the vendored
 # checkouts — #427 again, one directory along. `**/` holds from anywhere at or
 # above the directory it names; run inside one — `cd target` — nothing is
-# excluded and the walk starts below the pattern.
+# excluded and the walk starts below the pattern. One component to each
+# pattern, for the same reason: `**/data/gitlab/**` named two and so held only
+# from at or above `data`, leaving `taplo format` in
+# `scripts/benchmarks/data/` to rewrite the checkout.
 #
 # It holds too widely, and that is the trade rather than a free win. A TOML
 # inside any directory called `target`, `tmp`, `result`, `node_modules`,
 # `data/gitlab` or `data/markdownlint` is dropped without a word, wherever it
 # is — a fixture under `tests/` included. `.gitignore` refuses the same
-# looseness a few lines up, and can: git anchors a leading `/` at the
+# looseness in `.gitignore`, and can: git anchors a leading `/` at the
 # repository root, and taplo has no way to say that. This is the closer of the
 # two to what is wanted, not a match for it.
 #
@@ -45,8 +48,8 @@ exclude = [
   "**/tmp/**",
   "**/result/**",
   "**/node_modules/**",
-  "**/data/gitlab/**",
-  "**/data/markdownlint/**",
+  "**/gitlab/**",
+  "**/markdownlint/**",
 ]
 
 [[rule]]
