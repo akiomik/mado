@@ -14,11 +14,16 @@ just test
 just lint
 ```
 
-These build the whole workspace, which includes the fuzz target under `fuzz/`.
-`libfuzzer-sys` compiles a vendored copy of libFuzzer from source, so a C++
-toolchain has to be available for them to get as far as mado's own code. A
-machine without one fails in `cc`, which is what that failure is about rather
-than anything in the diff being checked.
+`just lint`, and so `just`, needs a C++ toolchain on the machine. It lints the
+whole workspace with `--all-targets`, which reaches the fuzz target under
+`fuzz/`, and that brings `libfuzzer-sys`, whose build script compiles a vendored
+copy of libFuzzer before anything of mado's is looked at. A machine without one
+fails in `cc`, which is what that failure is about rather than anything in the
+diff being checked.
+
+`just test` does not: the fuzz target is a `[[bin]]` with `test`, `bench` and
+`doc` all `false`, so `cargo test` and `cargo doc` leave the package alone
+entirely. Neither does CI's coverage job, for the same reason.
 
 ## Changelog
 

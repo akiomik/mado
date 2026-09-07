@@ -1,4 +1,6 @@
-/target
+# Any of them: the workspace's own, and the one an older checkout still has
+# under `fuzz/` from when that was a workspace of its own.
+target/
 flamegraph.svg
 /tmp
 /result
