@@ -20,29 +20,14 @@ pub struct Document<'a> {
     pub ast: &'a AstNode<'a>,
 
     /// The same document parsed with GFM's autolink extension on, which MD034
-    /// walks and no other rule does. Taken on the first ask and not before:
-    /// every other rule reads `ast`, so a run without MD034 in it never parses
-    /// twice. [`Document::autolink_ast`] is the ask.
+    /// walks and no other rule does.
     ///
-    /// What MD034 reports is a URL a reader is handed a link to without anyone
-    /// having written a link around it, and the autolink extension is what
-    /// decides which text that is: `http\://example.com` and
-    /// `http://localhost/x` are both URLs to a scanner and neither is linked,
-    /// while `http://ex\-ample.com/` is linked with the backslash still in it.
-    /// Asking comrak is asking the parser the rule reports on.
+    /// The extension does not only add links: a bare URL splits the text node
+    /// it was written in, and MD020, MD036 and MD037 each read a text node
+    /// whole. Each has a test that fails if it is pointed here.
     ///
-    /// It is a tree of its own because the extension does not only add links.
-    /// A bare URL takes the text around it with it, splitting the text node it
-    /// was written in into as many as three, and a rule that reads a text node
-    /// whole reads a different document for it: MD036 counts a paragraph's
-    /// emphasis once per text node in it, MD037 matches an emphasis pair inside
-    /// one, and MD020 asks whether a heading's last one ends in a `#`. None of
-    /// them is asking about links, and each of them is wrong about a document
-    /// that has one.
-    ///
-    /// This is [`Document::ast`] itself where the two would be the same tree,
-    /// which is most documents: a URL is usually written as a link's
-    /// destination, and no autolink can be made out of one.
+    /// Filled on the first ask, so a run without MD034 in it never parses
+    /// twice.
     autolink_ast: OnceCell<&'a AstNode<'a>>,
 
     /// What the second parse takes, kept for as long as it might be asked for.
@@ -127,41 +112,13 @@ impl<'a> Document<'a> {
     /// [`Document::autolink_ast`], parsed only where it would differ from
     /// `ast`.
     ///
-    /// A document the extension can find no autolink in parses to the same tree
-    /// either way, and `ast` is handed back rather than parsed a second time.
-    /// comrak begins an autolink at a `://`, a `www.` or an `@`, so the
-    /// question is whether the document has one of those somewhere the inline
-    /// parser would read it as text — and `ast` can be asked, because up to the
-    /// first autolink the two parses are the same parse.
+    /// comrak begins an autolink at a `://`, a `www.` or an `@`, and only
+    /// where the inline parser is reading text, so a document whose text nodes
+    /// hold none of the three parses the same either way.
     ///
-    /// They are the same parse because the extension adds nothing but a branch
-    /// at those three, and takes `:`, `w` and `@` for special bytes to reach
-    /// it. Without it they are ordinary text, so the marker that begins the
-    /// first autolink of the extended parse is text of one node in `ast`, whole
-    /// — the two cannot part company before it, and a node cannot be split
-    /// where no construct begins. That is what makes the text nodes of `ast`
-    /// the right place to look, and it is a narrower place than the document:
-    /// a URL written as a link's destination, inside a code span or inside a
-    /// raw HTML tag is not text by the time the parser is reading it, and a
-    /// destination is where a URL is usually written.
-    ///
-    /// A text node inside a link is not passed over, tempting as it is: comrak
-    /// refuses an autolink while it is inside brackets, but it counts its way
-    /// out of them on any `]` at all, so the `http://x.example.com/` of
-    /// `[a [b] http://x.example.com/](y)` is inside link text and autolinked
-    /// both. Skipping those made a URL's report depend on whether the document
-    /// had another one somewhere else, which is the shape of bug that is worst
-    /// to have: not a wrong report, but a right one that is not made.
-    ///
-    /// Coarse on the `@`, deliberately. comrak asks an email address for a
-    /// period after the `@` as well, so the guard could ask for one too and
-    /// stay sound — and it would buy nothing. Of the 1522 documents in the
-    /// gitlab benchmark corpus, 1000 take the second parse, 13 of those on the
-    /// `@` alone, and every one of the 13 has a period somewhere after it:
-    /// prose ends its sentences. The parse it would save is one nobody writes.
-    ///
-    /// `autolink_ast_is_ast_only_when_the_trees_agree` is the test that this
-    /// reasoning is comrak's behaviour and not just an account of it.
+    /// `autolink_ast_is_ast_only_when_the_trees_agree` is what holds that: it
+    /// renders both parses and fails if a document handed back as its own
+    /// answer would have differed.
     fn parse_with_autolink(
         arena: &'a Arena<'a>,
         text: &str,
@@ -607,41 +564,14 @@ mod tests {
         assert!(Document::open(&arena, path).is_ok());
     }
 
-    // `Document::parse_with_autolink` hands `ast` back for a document it reads
-    // as one the extension can find no autolink in, and MD034 walks whatever it
-    // hands back — so a document it is wrong about is one MD034 reports nothing
-    // for and says nothing about. What makes it right is an argument about
-    // comrak's inline parser rather than anything checked at the time, and this
-    // is where that argument is checked against comrak.
+    // Handing `ast` back for a document the extension would have changed is
+    // the failure MD034 reports nothing for and says nothing about, so it is
+    // asserted: both parses are rendered, and a document marked as its own
+    // answer has to render the same either way.
     //
-    // The two parses are rendered and compared, a renderer being what says
-    // which text the extension made a link of. A document they differ on is one
-    // the second tree was owed, and handing `ast` back for it is the failure
-    // that has no symptom. The other direction is cost rather than correctness,
-    // so it is recorded per input instead of asserted over all of them: the
-    // second column is whether the document was its own answer, and the two
-    // marked `false` against an unchanged rendering are what the guard is
-    // deliberately coarse about.
-    //
-    // The inputs are the shapes the argument turns on. A marker the parser
-    // never reads as text — a destination, a code span, a raw HTML tag, an
-    // indented or fenced block — is one no autolink can be made of, and those
-    // are the documents that are their own answer. A marker in text is owed the
-    // second parse wherever it is written, link text included: comrak refuses
-    // an autolink inside brackets but counts its way out of them on any `]`,
-    // which the three nested rows are here for. And the markers that only look
-    // like markers are owed nothing.
-    //
-    // `WWW.EXAMPLE.COM` is among those, and is the row that guards the guard.
-    // `literal.contains("www.")` is written in lower case, which is right only
-    // for as long as comrak matches `www.` in lower case — cmark-gfm compares
-    // it with `memcmp` and comrak with `starts_with`, so the two agree today.
-    // Were comrak to stop, the extended parse would link this and the plain one
-    // would not, while the guard carried on calling the document its own
-    // answer: which is the assertion below, and it would fail. The scheme has
-    // no such row to spare, `://` having no letters in it for a case to differ
-    // in; `HTTP://WWW.EXAMPLE.COM/` is here to be parsed twice and linked by
-    // neither, and #420 is what fails when comrak closes that one.
+    // The second column is recorded rather than asserted. The other direction
+    // is cost and not correctness — a document parsed twice for nothing is
+    // slow, not wrong.
     #[test]
     fn autolink_ast_is_ast_only_when_the_trees_agree() -> Result<()> {
         let texts = [

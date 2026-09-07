@@ -25,17 +25,12 @@ impl MD034 {
 
     /// Whether `node` is a link written as nothing but the URL itself.
     ///
-    /// A bare URL and an autolink reach the tree as the same node: comrak
-    /// gives both a link holding one text child, and the URL is the text
-    /// either way. What tells them apart is how much of the line the link
-    /// covers. `<http://example.com>` and `[text](http://example.com)` are
-    /// written with something around the text and so span more of it than
-    /// their text does, and comrak measures the text inside the wrapper. A
-    /// bare URL has no wrapper to measure, and comrak says so by giving the
-    /// text the link's own position.
+    /// comrak gives a bare URL and an `<...>` autolink the same shape — a link
+    /// holding one text child — and tells them apart by the span: only a bare
+    /// one has no wrapper, so its text carries the link's own position.
     ///
-    /// Asked of any node, and answered for any node: a caller that has not
-    /// checked what it is holding gets `false` rather than a wrong answer.
+    /// Answers for any node, so a caller that has not checked what it holds
+    /// gets `false` rather than a wrong answer.
     fn is_bare(node: &AstNode<'_>) -> bool {
         let data = node.data.borrow();
         if !matches!(data.value, NodeValue::Link(_)) {
@@ -66,24 +61,14 @@ impl RuleLike for MD034 {
 
             let data = node.data.borrow();
 
-            // #405's correction, a position from inside a table cell being
-            // measured against the unescaped cell rather than against the line.
-            // It corrects that and nothing else, so a position comrak measured
-            // against the wrong line comes back against the wrong line: the
-            // inlines after a link whose destination wraps are a line behind,
-            // and #423 has that.
+            // Puts back the columns an escaped pipe cost a position measured
+            // inside a table cell. It corrects the column and not the line;
+            // #423 is the line.
             let mut position = doc.written_position(data.sourcepos);
 
-            // The byte after the URL's last, which is the column this rule has
-            // reported since it was written and the only end column in the
-            // crate that is not the span's last byte. #424 is where that is to
-            // be settled; it is kept here so that a change about which text is
-            // a bare URL does not move the columns of the ones that still are.
-            //
-            // Asked for as the byte after rather than as the last byte's column
-            // stepped past: `written_position` answers for a column by the
-            // character the line has at it, and the byte after the URL is not
-            // the URL's.
+            // The byte after the URL's last: this rule's end column has meant
+            // that since it was written, and is the crate's only one that
+            // does. #424 is where that gets settled.
             position.end.column += 1;
 
             let violation = self.to_violation(doc.path.clone(), position);
@@ -191,12 +176,8 @@ mod tests {
         Ok(())
     }
 
-    // A period is asked of a `www.` host and not of a scheme'd one — cmark-gfm
-    // passes `allow_short` for the second and not the first — so GFM autolinks
-    // this and mado no longer reports it. comrak asks a period of both, and
-    // #421 is where that is tracked. #408's table has this row the other way
-    // round, which is how it was acted on before it was checked. Failing here
-    // is comrak having closed the gap, and the fix is to expect a violation.
+    // GFM autolinks this and comrak does not, so mado does not report it.
+    // #421. Failing here means comrak closed the gap: expect a violation.
     #[test]
     fn check_no_errors_with_domain_without_period() -> Result<()> {
         let text = "For more information, see http://localhost/x.".to_owned();
@@ -319,14 +300,9 @@ mod tests {
         Ok(())
     }
 
-    // GFM refuses an autolink anywhere inside brackets, asking the bracket stack
-    // rather than a flag, so this is one link with a URL in its text and none of
-    // it is bare. comrak asks a `bool` that the inner `]` clears, autolinks
-    // through the outer link, and swallows the `](y)` that would have closed it.
-    // This is the report mado gains to that, and #422 tracks it. It is pinned
-    // rather than worked around for the same reason as #420 and #421: the rule
-    // reports the links its parser makes. Failing here is comrak having closed
-    // the gap, and the fix is to expect no violation.
+    // GFM leaves this whole thing inside the link and comrak autolinks
+    // through it, so mado reports a URL GFM does not. #422. Failing here means
+    // comrak closed the gap: expect no violation.
     #[test]
     fn check_errors_with_bare_url_after_nested_brackets() -> Result<()> {
         let text = "see [a [b] http://x.example.com/](y) now".to_owned();
@@ -357,12 +333,9 @@ mod tests {
         Ok(())
     }
 
-    // A scheme written in any case is one cmark-gfm autolinks, comparing it
-    // with `strncasecmp`, and comrak compares it case-sensitively instead. This
-    // is the report mado loses to that, and #420 is where it is tracked: the
-    // rule reports the links its parser makes, and this is not one of them.
-    // Failing here is comrak having closed the gap, and the fix is to expect a
-    // violation rather than to work around it.
+    // GFM autolinks a scheme in any case and comrak does not, so mado does
+    // not report it. #420. Failing here means comrak closed the gap: expect a
+    // violation.
     #[test]
     fn check_no_errors_with_upper_case_scheme() -> Result<()> {
         let text = "For more information, see HTTP://www.example.com/.".to_owned();
@@ -400,13 +373,9 @@ mod tests {
         Ok(())
     }
 
-    // Userinfo is #421 wearing a different face. GFM reads the host past the
-    // `:` of a `user:pass@` — `check_domain` is called with `allow_short` and
-    // stops at the `:` with a length rather than a refusal — and autolinks the
-    // whole URL. comrak asks a period of what comes before the `:`, finds none,
-    // and autolinks nothing there; what is left is the email address the `@`
-    // matches, which starts inside the URL. So the report moves from the URL's
-    // first column to its password's, rather than being lost outright.
+    // #421 again: GFM links the whole URL, comrak links none of it, and the
+    // `@` is left for the email matcher — so the report starts at the password
+    // rather than at the URL.
     #[test]
     fn check_errors_with_userinfo() -> Result<()> {
         let text = "see http://user:pass@www.example.com/ now".to_owned();
