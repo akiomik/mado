@@ -1,4 +1,19 @@
-exclude = [".git/**/*"]
+# taplo does not read `.gitignore`, so it formats what a build or a setup
+# script leaves behind: `cargo package` writes a `Cargo.toml` under `target/`
+# that it wants to reformat, which is #427. These resolve against taplo's
+# working directory, so run it from the repository root, as `just` and the
+# workflow do. Shorter than `.gitignore`, which also names directories nothing
+# writes a TOML into.
+exclude = [
+  ".git/**",
+  "target/**",
+  "fuzz/target/**",
+  "tmp/**",
+  "result/**",
+  "scripts/benchmarks/node_modules/**",
+  "scripts/benchmarks/data/gitlab/**",
+  "scripts/acceptance/data/markdownlint/**",
+]
 
 [[rule]]
 include = ["**/mado.toml"]
