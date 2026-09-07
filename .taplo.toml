@@ -1,4 +1,19 @@
-exclude = [".git/**/*"]
+# taplo walks the tree itself and knows nothing of git, so a build output or a
+# scratch directory with a TOML in it is one it tries to format. `cargo package`
+# writes `target/package/<name>/Cargo.toml`, which cargo formats rather than
+# taplo, and `just fmt` then fails on a working tree with nothing wrong with it.
+#
+# These are `.gitignore`'s directories, spelled the same way — anchored, so a
+# fixture directory that happens to be called `target` is still a TOML this
+# formats rather than one it silently leaves alone. They have to be kept in step
+# by hand; nothing here can read the other file.
+exclude = [
+  ".git/**/*",
+  "target/**/*",
+  "fuzz/target/**/*",
+  "tmp/**/*",
+  "result/**/*",
+]
 
 [[rule]]
 include = ["**/mado.toml"]

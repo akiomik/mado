@@ -8,6 +8,9 @@
 # No trailing slash. That would match directories alone, and git reads a symlink
 # as a file, so a `target` symlinked onto another volume — which is how a Rust
 # checkout is kept out of a backup — would come back as untracked.
+#
+# `.taplo.toml` excludes the directories among these by hand: taplo walks the
+# tree without asking git, so the two drift unless they are edited together.
 /target
 /fuzz/target
 flamegraph.svg
