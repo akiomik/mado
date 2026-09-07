@@ -17,6 +17,12 @@ comrak.workspace = true
 [dependencies.mado]
 path = ".."
 
+# `test`, `doc` and `bench` are what keep this crate out of everything but
+# `cargo clippy --all-targets`. Three CI jobs read `--workspace` and want no C++
+# toolchain because of these three lines; a `tests/` file or a lib target here
+# would put `libfuzzer-sys` in their graph and fail them in `cc`, which reads as
+# nothing to do with whatever was changed. `CONTRIBUTING.md` says so from the
+# other end.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"
