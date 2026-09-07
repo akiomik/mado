@@ -62,6 +62,13 @@ rand = "0.10"
 serial_test = "3.5"
 tempfile = "3.27"
 
+# Also what `cargo fuzz` builds with, which it did not used to be. A profile is
+# resolved at the workspace root and `fuzz/` is a member rather than a root of
+# its own now, so `lto` here is cross-crate ThinLTO on every fuzz build: slower
+# to build, and coarser backtraces where `mado` and `comrak` inline into each
+# other. It cannot be turned off for the one package — cargo rejects `lto` in a
+# `package` profile — so undoing it would take a profile of its own and a change
+# to what CD passes `cargo build`.
 [profile.release]
 lto = "thin"
 
