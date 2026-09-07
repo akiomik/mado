@@ -1,4 +1,4 @@
-use comrak::nodes::{AstNode, NodeValue, Sourcepos};
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 
 use crate::{Document, violation::Violation};
@@ -33,10 +33,18 @@ impl MD034 {
     /// their text does, and comrak measures the text inside the wrapper. A
     /// bare URL has no wrapper to measure, and comrak says so by giving the
     /// text the link's own position.
-    fn is_bare(node: &AstNode<'_>, position: Sourcepos) -> bool {
+    ///
+    /// Asked of any node, and answered for any node: a caller that has not
+    /// checked what it is holding gets `false` rather than a wrong answer.
+    fn is_bare(node: &AstNode<'_>) -> bool {
+        let data = node.data.borrow();
+        if !matches!(data.value, NodeValue::Link(_)) {
+            return false;
+        }
+
         node.first_child().is_some_and(|text| {
-            let data = text.data.borrow();
-            matches!(data.value, NodeValue::Text(_)) && data.sourcepos == position
+            let text = text.data.borrow();
+            matches!(text.value, NodeValue::Text(_)) && text.sourcepos == data.sourcepos
         })
     }
 }
@@ -52,10 +60,11 @@ impl RuleLike for MD034 {
         let mut violations = vec![];
 
         for node in doc.autolink_ast().descendants() {
-            let data = node.data.borrow();
-            if !matches!(data.value, NodeValue::Link(_)) || !Self::is_bare(node, data.sourcepos) {
+            if !Self::is_bare(node) {
                 continue;
             }
+
+            let data = node.data.borrow();
 
             // #405's correction, a position from inside a table cell being
             // measured against the unescaped cell rather than against the line.
