@@ -31,7 +31,10 @@ flamegraph target="scripts/benchmarks/data/gitlab":
 # `cargo fuzz` takes no `--locked` and forwards no cargo flags that mean it, so
 # a run whose manifests have moved rewrites the lock on its way past — the one
 # CD builds against and `check-versions.sh` reads, now that `fuzz/` shares it.
-# `cargo metadata --locked` is the same question asked first, and cheap.
+# `cargo metadata --locked` is the same question asked first. Not free on a cold
+# cache — it extracts every package in the resolve, dev-dependencies a fuzz
+# build never touches included — but anyone reaching for `just fuzz` has run
+# `just test` before it.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}
