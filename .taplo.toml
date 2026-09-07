@@ -12,12 +12,12 @@
 # eight ignore files across the tree, one of them
 # `scripts/benchmarks/data/gitlab/.gitignore` with 594 entries of its own.
 #
-# The cost is that a TOML added outside these three goes unformatted until the
-# list learns about it — and it is the smaller cost: unformatted is a thing to
-# notice, where formatting somebody else's vendored manifest is a thing to
-# undo.
+# The cost is that a TOML added outside these three is left to itself until the
+# list learns about it: unformatted, and — if it is a `mado.toml` — unchecked
+# against the schema below, since `lint` reads the same list. Still the smaller
+# cost. Neither is as bad as formatting somebody else's vendored manifest,
+# which is what `just fmt` did.
 include = ["*.toml", "fuzz/*.toml", "scripts/benchmarks/*.toml"]
-exclude = [".git/**/*"]
 
 [[rule]]
 include = ["**/mado.toml"]
