@@ -13,15 +13,23 @@
 # names those scripts' own `.gitignore` files use.
 #
 # Each begins `**/` because taplo resolves a relative pattern against the
-# directory it is run in, not against this file. Written as `target/**` they
-# match nothing from a subdirectory, and `taplo format` there rewrites the
-# vendored checkouts — #427 again, one directory along. With `**/` the six hold
-# from anywhere, which is more than the tree walk they replaced managed.
+# directory it is run in, not against this file. `target/**` still matches a
+# `target` sitting directly below wherever taplo starts; what it misses is one
+# nested deeper, so from `scripts/` it would not reach
+# `benchmarks/data/gitlab/`, and `taplo format` there rewrote the vendored
+# checkouts — #427 again, one directory along. `**/` holds from anywhere.
 #
-# The cost is that the list has to learn about a new generated directory. When
-# it has not, the failure is #427: something gets rewritten that should not
-# have been, the next time anyone runs `just fmt`. Loud, unlike an allowlist
-# that has not learned about a new source file and simply stops checking it.
+# It holds too widely, and that is the trade rather than a free win. A TOML
+# inside any directory called `target`, `tmp`, `result`, `node_modules`,
+# `data/gitlab` or `data/markdownlint` is dropped without a word, wherever it
+# is — a fixture under `tests/` included. `.gitignore` refuses the same
+# looseness a few lines up, and can: git anchors a leading `/` at the
+# repository root, and taplo has no way to say that. This is the closer of the
+# two to what is wanted, not a match for it.
+#
+# The other cost is a generated directory the list has not learned about, and
+# that one is loud: something gets rewritten that should not have been, the
+# next time anyone runs `just fmt`.
 exclude = [
   "**/target/**",
   "**/tmp/**",
