@@ -25,12 +25,14 @@ parsed and therefore what gets reported.
 - **Breaking:** MD034 reports the URLs comrak autolinks, which is GFM as mado
   parses it, and comrak and GitHub disagree in three places. Two are reports
   lost: a scheme not written in lower case, such as `HTTP://www.example.com/`
-  (#420), and a host with no period in it, such as the `http://localhost:3000/`
-  a development setup is written with (#421) — GitHub links both. One is a
-  report gained: a URL inside link text that follows a nested `]`, as in
-  `[note [1] https://example.com/doc](/x)`, which GitHub leaves inside the link
-  (#422). Each is comrak's to close, and each is pinned by a test that fails
-  when it is (#418)
+  (#420), and a host with no period before its first `:`, such as the
+  `http://localhost:3000/` a development setup is written with, or the
+  `http://user:pass@www.example.com/` a URL carrying userinfo is (#421) — GitHub
+  links both whole, where mado reports the second from its password and the
+  first not at all. One is a report gained: a URL inside link text that follows
+  a nested `]`, as in `[note [1] https://example.com/doc](/x)`, which GitHub
+  leaves inside the link (#422). Each is comrak's to close, and each is pinned
+  by a test that fails when it is (#418)
 
 ### Fixed
 

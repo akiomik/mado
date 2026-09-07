@@ -391,6 +391,26 @@ mod tests {
         Ok(())
     }
 
+    // Userinfo is #421 wearing a different face. GFM reads the host past the
+    // `:` of a `user:pass@` — `check_domain` is called with `allow_short` and
+    // stops at the `:` with a length rather than a refusal — and autolinks the
+    // whole URL. comrak asks a period of what comes before the `:`, finds none,
+    // and autolinks nothing there; what is left is the email address the `@`
+    // matches, which starts inside the URL. So the report moves from the URL's
+    // first column to its password's, rather than being lost outright.
+    #[test]
+    fn check_errors_with_userinfo() -> Result<()> {
+        let text = "see http://user:pass@www.example.com/ now".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD034::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 17, 1, 37)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     // An image's alt text is square brackets too, and GFM autolinks nothing
     // inside them: the alt text of the rendered image is the URL as text, and
     // no reader is handed a link to it.
