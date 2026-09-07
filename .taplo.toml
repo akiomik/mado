@@ -5,19 +5,22 @@
 # rewrote it — on a working tree with nothing wrong.
 #
 # So the generated and vendored directories are named, and everything else is
-# formatted. `target` is cargo's, under the workspace root and under `fuzz/` in
-# a checkout that predates `fuzz/` joining it; `tmp` is
-# `scripts/acceptance/test.sh`'s and `result` is a nix build's; `node_modules`
-# is what `scripts/benchmarks/comparison.sh` asks for with `npm ci`; `gitlab`
-# and `markdownlint` are the two checkouts the setup scripts clone, and are the
-# names those scripts' own `.gitignore` files use.
+# formatted. `.git` is walked like any other, and a tool that keeps state there
+# writes a TOML taplo would reformat. `target` is cargo's, under the workspace
+# root and under `fuzz/` in a checkout that predates `fuzz/` joining it. `tmp`
+# is `scripts/acceptance/test.sh`'s and `result` is a nix build's.
+# `node_modules` is what `scripts/benchmarks/comparison.sh` asks for with
+# `npm ci`. `gitlab` and `markdownlint` are the two checkouts the setup scripts
+# clone, named as those scripts' own `.gitignore` files name them.
 #
 # Each begins `**/` because taplo resolves a relative pattern against the
 # directory it is run in, not against this file. `target/**` still matches a
 # `target` sitting directly below wherever taplo starts; what it misses is one
 # nested deeper, so from `scripts/` it would not reach
 # `benchmarks/data/gitlab/`, and `taplo format` there rewrote the vendored
-# checkouts — #427 again, one directory along. `**/` holds from anywhere.
+# checkouts — #427 again, one directory along. `**/` holds from anywhere at or
+# above the directory it names; run inside one — `cd target` — nothing is
+# excluded and the walk starts below the pattern.
 #
 # It holds too widely, and that is the trade rather than a free win. A TOML
 # inside any directory called `target`, `tmp`, `result`, `node_modules`,
@@ -30,7 +33,14 @@
 # The other cost is a generated directory the list has not learned about, and
 # that one is loud: something gets rewritten that should not have been, the
 # next time anyone runs `just fmt`.
+#
+# `[rule.schema]` below is relative to the working directory in the same way,
+# and cannot be `**/`-ed out of it: `taplo lint` from `scripts/benchmarks/`
+# looks for `scripts/benchmarks/pkg/json-schema/` and fails on a file that is
+# fine. That predates this list — `main` does it too — and nothing in the
+# config can spell a path relative to the config.
 exclude = [
+  "**/.git/**",
   "**/target/**",
   "**/tmp/**",
   "**/result/**",
