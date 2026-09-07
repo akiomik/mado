@@ -4,34 +4,17 @@ tempdir := `mktemp -d`
 
 default: fmt test lint
 
-# taplo walks the tree itself and asks git nothing, so pointing it at the
-# repository is how `just fmt` came to rewrite the `Cargo.toml` that `cargo
-# package` leaves under `target/`. git is asked instead: `--cached` for the
-# tracked ones and `--others --exclude-standard` for a TOML that is written but
-# has never been added, which is the one a tracked-only list would miss.
-# Mirroring `.gitignore` into `.taplo.toml` was the other way and cannot be
-# done — `scripts/benchmarks/data/gitlab/.gitignore` alone runs to some 600
-# entries.
-#
-# `bash` with `pipefail`, which just's `sh -cu` has not: a `git ls-files` that
-# failed would otherwise leave `xargs -r` nothing to do and the recipe green
-# having formatted nothing. An extracted release tarball has no `.git`, and
-# that is what it would have looked like there.
 fmt:
-    #!/usr/bin/env bash
-    set -euo pipefail
     cargo fmt --all --check
     nix fmt flake.nix
-    git ls-files -z --cached --others --exclude-standard '*.toml' | xargs -0 -r taplo format
+    taplo format
 
 test:
     CLICOLOR_FORCE=true cargo test --locked --all-features --workspace
 
 lint:
-    #!/usr/bin/env bash
-    set -euo pipefail
     cargo clippy --locked --all-targets --all-features --workspace -- -D warnings
-    git ls-files -z --cached --others --exclude-standard '*.toml' | xargs -0 -r taplo lint
+    taplo lint
 
 cov:
     CLICOLOR_FORCE=true cargo llvm-cov --locked --open

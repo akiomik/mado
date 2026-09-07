@@ -1,3 +1,17 @@
+# The TOMLs this repository owns, rather than every one taplo can find by
+# walking the tree. `cargo package` writes `target/package/<name>/Cargo.toml`,
+# which cargo formats and taplo does not agree with, so `taplo format --check`
+# failed and `just fmt` rewrote it — on a working tree with nothing wrong.
+# `scripts/benchmarks/node_modules` and the two vendored checkouts under
+# `scripts/*/data` are the same shape, and `.gitignore` cannot be mirrored into
+# an `exclude` here: `scripts/benchmarks/data/gitlab/.gitignore` alone runs to
+# some 600 entries, spread over seven ignore files.
+#
+# Naming where they are rather than where they are not. A TOML added somewhere
+# else goes unformatted until this list learns about it, which is the cost —
+# and the smaller one: unformatted is a thing to notice, where formatting
+# somebody else's vendored manifest is a thing to undo.
+include = ["*.toml", "fuzz/*.toml", "scripts/benchmarks/*.toml"]
 exclude = [".git/**/*"]
 
 [[rule]]
