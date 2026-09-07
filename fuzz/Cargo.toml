@@ -2,14 +2,17 @@
 name = "mado-fuzz"
 version = "0.0.0"
 publish = false
-edition = "2021"
+edition.workspace = true
 
 [package.metadata]
 cargo-fuzz = true
 
+[lints]
+workspace = true
+
 [dependencies]
 libfuzzer-sys = "0.4"
-comrak = "0.33.0"
+comrak.workspace = true
 
 [dependencies.mado]
 path = ".."
