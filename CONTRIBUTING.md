@@ -14,6 +14,12 @@ just test
 just lint
 ```
 
+These build the whole workspace, which includes the fuzz target under `fuzz/`.
+`libfuzzer-sys` compiles a vendored copy of libFuzzer from source, so a C++
+toolchain has to be available for them to get as far as mado's own code. A
+machine without one fails in `cc`, which is what that failure is about rather
+than anything in the diff being checked.
+
 ## Changelog
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).

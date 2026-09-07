@@ -1,13 +1,13 @@
 [workspace]
 members = ["fuzz"]
 
-# What both packages agree on, so that neither can drift from the other. The
-# fuzz target hands a `comrak::Arena` to `mado::Document`, so the two have to be
-# the same comrak; naming the version here is what makes that so rather than
-# hoping.
+# What both packages agree on, so that neither can drift from the other.
 [workspace.package]
 edition = "2024"
 
+# The fuzz target hands a `comrak::Arena` to `mado::Document`, so the two have
+# to be the same comrak; naming the version here is what makes that so rather
+# than hoping.
 [workspace.dependencies]
 comrak = "0.54"
 
