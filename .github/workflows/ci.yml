@@ -80,8 +80,10 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       # `--workspace` reaches the fuzz target, whose `libfuzzer-sys` compiles a
       # vendored libFuzzer. `ubuntu-latest` ships a C++ compiler, so this asks
-      # for one only when it is missing. #428 is the same question for the C
-      # compiler every job needs and none of them asks for.
+      # for one only when it is missing, and updates first: an image that has
+      # none is old enough for its index to name a `g++` the archive dropped.
+      # #428 is the same question for the C compiler every job needs and none
+      # of them asks for.
       - name: Install a C++ toolchain for libfuzzer-sys
         run: |
           if ! command -v c++ > /dev/null; then
