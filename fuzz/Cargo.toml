@@ -17,8 +17,10 @@ comrak.workspace = true
 [dependencies.mado]
 path = ".."
 
-# `libfuzzer-sys` needs a C++ toolchain to build, and the `false`s below are
-# what keep it out of the graph of every workspace-wide command.
+# `cargo test`, `cargo doc` and the coverage run skip this package for the
+# `false`s below. Everything else that builds default targets reaches it,
+# `cargo clippy --workspace` included, and compiles a vendored libFuzzer with
+# a C++ toolchain on the way.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"
