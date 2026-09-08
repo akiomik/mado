@@ -9,8 +9,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-# The `[package]` table, not the first `version =` in the file: a dependency
-# pinned in table form above it would otherwise be read as mado's version.
+# The `[package]` table, not the first `version =` in the file: a `version` in
+# `[workspace.package]` above it would otherwise be read as mado's.
 version=$(sed -n '/^\[package\]$/,/^\[/{
   s/^version = "\{0,1\}\([^"]*\)"\{0,1\}$/\1/p
 }' Cargo.toml | head -1)

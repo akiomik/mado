@@ -61,6 +61,7 @@ serial_test = "3.5"
 tempfile = "3.27"
 
 # Resolved at the workspace root, so `cargo fuzz` builds with this as well.
+# Cargo takes no `lto` in a package profile, so `fuzz/` cannot opt out of it.
 [profile.release]
 lto = "thin"
 

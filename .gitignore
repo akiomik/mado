@@ -1,3 +1,5 @@
+# No trailing slash: git reads a `target` symlinked onto another volume as a
+# file, which `/target/` would not match.
 /target
 /fuzz/target
 flamegraph.svg
