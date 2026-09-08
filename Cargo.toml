@@ -64,8 +64,8 @@ tempfile = "3.27"
 # slower to build, and coarser backtraces where `mado` and `comrak` inline into
 # each other.
 # Cargo takes no `lto` in a package profile and `cargo fuzz` picks only dev or
-# release, so opting `fuzz/` out of it would take a profile of its own and a
-# change to what CD passes `cargo build`.
+# release, so sparing the fuzz build means taking `lto` out of here into a
+# profile CD names on its `cargo build`.
 [profile.release]
 lto = "thin"
 
