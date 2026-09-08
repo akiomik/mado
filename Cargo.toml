@@ -1,13 +1,11 @@
 [workspace]
 members = ["fuzz"]
 
-# What both packages agree on, so that neither can drift from the other.
 [workspace.package]
 edition = "2024"
 
-# The fuzz target hands a `comrak::Arena` to `mado::Document`, so the two have
-# to be the same comrak; naming the version here is what makes that so rather
-# than hoping.
+# The fuzz target hands a `comrak::Arena` to `mado::Document`, so both packages
+# have to build the same comrak.
 [workspace.dependencies]
 comrak = "0.54"
 
@@ -62,13 +60,7 @@ rand = "0.10"
 serial_test = "3.5"
 tempfile = "3.27"
 
-# Also what `cargo fuzz` builds with, which it did not used to be. A profile is
-# resolved at the workspace root and `fuzz/` is a member rather than a root of
-# its own now, so `lto` here is cross-crate ThinLTO on every fuzz build: slower
-# to build, and coarser backtraces where `mado` and `comrak` inline into each
-# other. It cannot be turned off for the one package — cargo rejects `lto` in a
-# `package` profile — so undoing it would take a profile of its own and a change
-# to what CD passes `cargo build`.
+# Resolved at the workspace root, so `cargo fuzz` builds with this as well.
 [profile.release]
 lto = "thin"
 

@@ -28,13 +28,8 @@ flamegraph target="scripts/benchmarks/data/gitlab":
     # See https://github.com/flamegraph-rs/flamegraph#dtrace-on-macos
     cargo flamegraph --root --profile bench --open -- check {{ target }}
 
-# `cargo fuzz` takes no `--locked` and forwards no cargo flags that mean it, so
-# a run whose manifests have moved rewrites the lock on its way past — the one
-# CD builds against and `check-versions.sh` reads, now that `fuzz/` shares it.
-# `cargo metadata --locked` is the same question asked first. Not free on a cold
-# cache — it extracts every package in the resolve, dev-dependencies a fuzz
-# build never touches included — but anyone reaching for `just fuzz` has run
-# `just test` before it.
+# `cargo fuzz` takes no `--locked` and would rewrite the workspace lock on its
+# way past. `cargo metadata` asks the same question first.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}

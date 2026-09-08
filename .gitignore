@@ -1,13 +1,3 @@
-# The workspace's own, and the one an older checkout still has under `fuzz/`
-# from when that was a workspace of its own. Anchored by the leading `/`, so a
-# `target` directory elsewhere in the tree is one the linter still sees: a
-# Markdown fixture inside one would otherwise go untracked and unlinted without
-# saying so. Not out of the published `.crate` — `Cargo.toml` names an
-# `include`, and cargo packages by that rather than by asking git.
-#
-# No trailing slash. That would match directories alone, and git reads a symlink
-# as a file, so a `target` symlinked onto another volume — which is how a Rust
-# checkout is kept out of a backup — would come back as untracked.
 /target
 /fuzz/target
 flamegraph.svg
