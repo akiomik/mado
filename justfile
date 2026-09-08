@@ -28,9 +28,7 @@ flamegraph target="scripts/benchmarks/data/gitlab":
     # See https://github.com/flamegraph-rs/flamegraph#dtrace-on-macos
     cargo flamegraph --root --profile bench --open -- check {{ target }}
 
-# `cargo fuzz` takes no `--locked`, so a run whose manifests have moved rewrites
-# the lock CD builds against.
-# Fuzz a target, checking the lock first.
+# Fuzz a target. `cargo fuzz` can rewrite the lock CD builds against.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}
