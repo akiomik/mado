@@ -19,14 +19,19 @@ parsed and therefore what gets reported.
   ignore file and `.git/info/exclude`, which mado had been reading by inheriting
   the walker's defaults, are no longer consulted. Neither travels with the tree
   being linted (#436)
+- `respect-ignore` and `respect-gitignore` no longer affect each other. Outside
+  a repository, turning `respect-gitignore` on used to change which directories
+  `.ignore` files were read from (#436)
 
 ### Fixed
 
 - `respect-gitignore` applies `.gitignore` files whether or not the tree still
   carries Git metadata, so a source archive or a Docker context copied without
-  `.git` no longer lints everything `.gitignore` lists. Outside a repository
-  mado reads ignore files only at or below the paths it was given; inside one
-  the search still stops at the repository root (#436)
+  `.git` no longer lints everything `.gitignore` lists. The search for them
+  stops at the repository root, or, for a tree that has none, at the directory
+  mado was started in. Each path given to `mado check` is judged on its own, so
+  naming a repository and an archive in one command reads both their
+  `.gitignore` files (#436)
 
 ## [0.3.2] - 2026-09-07
 

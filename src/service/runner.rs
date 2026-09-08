@@ -33,7 +33,7 @@ impl LintRunner {
 }
 
 pub struct ParallelLintRunner {
-    walker: WalkParallel,
+    walkers: Vec<WalkParallel>,
     config: Config,
     capacity: usize,
 }
@@ -41,14 +41,14 @@ pub struct ParallelLintRunner {
 impl ParallelLintRunner {
     #[inline]
     pub fn new(patterns: &[PathBuf], config: Config, capacity: usize) -> Result<Self> {
-        let walker = WalkParallelBuilder::build(
+        let walkers = WalkParallelBuilder::build(
             patterns,
             config.lint.respect_ignore,
             config.lint.respect_gitignore,
         )?;
 
         Ok(Self {
-            walker,
+            walkers,
             config,
             capacity,
         })
@@ -72,7 +72,9 @@ impl ParallelLintRunner {
         });
 
         let mut builder = MarkdownLintVisitorFactory::new(self.config, tx)?;
-        self.walker.visit(&mut builder);
+        for walker in self.walkers {
+            walker.visit(&mut builder);
+        }
 
         // Wait for the completion
         drop(builder);
@@ -117,6 +119,12 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
+
+    #[test]
+    fn parallel_lint_runner_new_empty_patterns() {
+        let result = ParallelLintRunner::new(&[], Config::default(), 0);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn parallel_lint_runner_run() -> Result<()> {

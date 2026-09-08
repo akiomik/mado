@@ -152,17 +152,29 @@ and [the JSON Schema for `mado.toml`](https://github.com/akiomik/mado/blob/main/
 
 ### Ignore files
 
-`respect-ignore` and `respect-gitignore` decide whether `.ignore` and
-`.gitignore` files exclude what they list. `.gitignore` applies whether or not
-the tree still carries Git metadata, so a clone and a source archive of the same
-tree lint the same files.
+`respect-ignore` and `respect-gitignore` are independent switches, deciding
+whether `.ignore` and `.gitignore` files exclude what they list. Neither moves
+the directories the other is read from.
 
-The search for ignore files stops at the repository root, as Git does. When no
-`.git` is found, mado reads ignore files only at or below the paths it was
-given, rather than searching up to the filesystem root.
+`.gitignore` applies whether or not the tree still carries Git metadata, so a
+clone and a source archive of the same tree lint the same files. Where the
+search for `.gitignore` files stops is decided for each path given to
+`mado check`, in this order:
+
+1. the repository root, if the path sits in one — a `.git` directory, the
+   `.git` file a worktree or submodule carries, or a `.jj` directory
+1. otherwise the directory mado was started in, if the path is below it — the
+   same directory `mado.toml` is looked for in
+1. otherwise the path itself
+
+`.ignore` files stop at the same place, except inside a repository, where they
+are read from every parent directory as [ripgrep] reads them.
 
 The global Git ignore file and `.git/info/exclude` are never read: neither
-travels with the tree being linted.
+travels with the tree being linted, so honouring them would make the result
+depend on the machine and on the clone.
+
+[ripgrep]: https://github.com/BurntSushi/ripgrep
 
 ## GitHub Actions
 

@@ -11,7 +11,7 @@
       "additionalProperties": false,
       "properties": {
         "respect-ignore": {
-          "description": "Exclude files that are ignored by .ignore. When no Git repository is found, only .ignore files at or below the paths being linted are read",
+          "description": "Exclude files that are ignored by .ignore. Independent of respect-gitignore",
           "type": "boolean",
           "default": true
         },

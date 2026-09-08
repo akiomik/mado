@@ -1,7 +1,8 @@
 use std::fs::File;
-use std::fs::create_dir;
+use std::fs::create_dir_all;
 use std::fs::write;
 use std::io::Write as _;
+use std::path::Path;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
@@ -261,28 +262,54 @@ fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
     })
 }
 
-/// Lays out a tree with a `.gitignore` excluding a directory that holds a
-/// Markdown file mado reports on, and no Git metadata anywhere.
-fn with_gitignored_tree<F>(f: F) -> Result<()>
+/// Lays out a tree of files under a temporary directory. A path ending in `/`
+/// is created as an empty directory.
+fn with_tree<F>(entries: &[(&str, &str)], f: F) -> Result<()>
 where
-    F: FnOnce(&PathBuf) -> Result<()>,
+    F: FnOnce(&Path) -> Result<()>,
 {
     let tmp_dir = tempdir().into_diagnostic()?;
-    let root = tmp_dir.path().to_path_buf();
-    create_dir(root.join("target")).into_diagnostic()?;
-    write(root.join(".gitignore"), "target/\n").into_diagnostic()?;
-    write(root.join("target/generated.md"), "#Hello.").into_diagnostic()?;
+    let root = tmp_dir.path();
+    for (path, content) in entries {
+        let path = root.join(path);
+        if let Some(dir) = path.parent() {
+            create_dir_all(dir).into_diagnostic()?;
+        }
+        if content.is_empty() && path.to_string_lossy().ends_with('/') {
+            create_dir_all(&path).into_diagnostic()?;
+        } else {
+            write(&path, content).into_diagnostic()?;
+        }
+    }
 
-    f(&root)?;
+    f(root)?;
 
     tmp_dir.close().into_diagnostic()
 }
 
+/// A `mado check` run rooted in `dir`, with colour out of the way.
+fn check_in(dir: &Path, args: &[&str]) -> Command {
+    let mut cmd = Command::new(cargo_bin!("mado"));
+    cmd.current_dir(dir)
+        .env_remove("CLICOLOR_FORCE")
+        .env("NO_COLOR", "1")
+        .arg("check")
+        .args(args);
+    cmd
+}
+
+/// A tree whose `.gitignore` lists a directory mado would otherwise report on,
+/// with no Git metadata anywhere: what a source archive or a Docker context
+/// copied without `.git` looks like.
+const IGNORED_BUILD_OUTPUT: &[(&str, &str)] = &[
+    (".gitignore", "target/\n"),
+    ("target/generated.md", "#Hello."),
+];
+
 #[test]
 fn check_respects_gitignore_without_git_metadata() -> Result<()> {
-    with_gitignored_tree(|root| {
-        let mut cmd = Command::new(cargo_bin!("mado"));
-        let assert = cmd.current_dir(root).args(["check", "."]).assert();
+    with_tree(IGNORED_BUILD_OUTPUT, |root| {
+        let assert = check_in(root, &["."]).assert();
         assert.success().stdout("All checks passed!\n");
         Ok(())
     })
@@ -290,19 +317,13 @@ fn check_respects_gitignore_without_git_metadata() -> Result<()> {
 
 #[test]
 fn check_without_respect_gitignore_walks_ignored_files() -> Result<()> {
-    with_gitignored_tree(|root| {
+    with_tree(IGNORED_BUILD_OUTPUT, |root| {
         write(
             root.join("mado.toml"),
             "[lint]\nrespect-gitignore = false\n",
         )
         .into_diagnostic()?;
-        let mut cmd = Command::new(cargo_bin!("mado"));
-        let assert = cmd
-            .current_dir(root)
-            .env_remove("CLICOLOR_FORCE")
-            .env("NO_COLOR", "1")
-            .args(["check", "."])
-            .assert();
+        let assert = check_in(root, &["."]).assert();
         assert.failure().stdout(indoc! {"
             ./target/generated.md:1:1: MD018 No space after hash on atx style header
             ./target/generated.md:1:1: MD041 First line in file should be a top level header
@@ -312,4 +333,175 @@ fn check_without_respect_gitignore_walks_ignored_files() -> Result<()> {
         "});
         Ok(())
     })
+}
+
+/// A project whose root `.gitignore` excludes a file in a subdirectory, linted
+/// by naming that subdirectory rather than the root.
+const IGNORED_BELOW_A_SUBDIRECTORY: &[(&str, &str)] = &[
+    ("proj/.gitignore", "docs/generated.md\n"),
+    ("proj/docs/generated.md", "#Hello."),
+    ("proj/docs/keep.md", "# Fine\n"),
+];
+
+#[test]
+fn check_subdirectory_reads_the_project_root_gitignore_without_git_metadata() -> Result<()> {
+    with_tree(IGNORED_BELOW_A_SUBDIRECTORY, |root| {
+        let assert = check_in(&root.join("proj"), &["docs"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_subdirectory_reads_the_project_root_gitignore_with_git_metadata() -> Result<()> {
+    with_tree(IGNORED_BELOW_A_SUBDIRECTORY, |root| {
+        create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+        let assert = check_in(&root.join("proj"), &["docs"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_subdirectory_reads_the_project_root_gitignore_with_jj_metadata() -> Result<()> {
+    with_tree(IGNORED_BELOW_A_SUBDIRECTORY, |root| {
+        create_dir_all(root.join("proj/.jj")).into_diagnostic()?;
+        let assert = check_in(&root.join("proj"), &["docs"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+/// Two `.gitignore` files whose patterns are anchored to their own directory,
+/// so a pattern read against the wrong root matches the wrong file.
+const ANCHORED_AT_TWO_LEVELS: &[(&str, &str)] = &[
+    ("proj/.gitignore", "/only-at-top.md\n"),
+    ("proj/docs/.gitignore", "/sub/only-in-sub.md\n"),
+    ("proj/docs/sub/only-at-top.md", "#Hello."),
+    ("proj/docs/sub/only-in-sub.md", "#Hello."),
+    ("proj/docs/sub/keep.md", "# Fine\n"),
+];
+
+/// Only `only-in-sub.md` is anchored at a directory that contains it, so it is
+/// the only one of the two the walk drops.
+const ANCHORED_AT_TWO_LEVELS_REPORT: &str = indoc! {"
+    docs/sub/only-at-top.md:1:1: MD018 No space after hash on atx style header
+    docs/sub/only-at-top.md:1:1: MD041 First line in file should be a top level header
+    docs/sub/only-at-top.md:1:1: MD047 File should end with a single newline character
+
+    Found 3 errors.
+"};
+
+#[test]
+fn check_keeps_gitignore_anchoring_per_directory_without_git_metadata() -> Result<()> {
+    with_tree(ANCHORED_AT_TWO_LEVELS, |root| {
+        let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
+        assert.failure().stdout(ANCHORED_AT_TWO_LEVELS_REPORT);
+        Ok(())
+    })
+}
+
+#[test]
+fn check_keeps_gitignore_anchoring_per_directory_with_git_metadata() -> Result<()> {
+    with_tree(ANCHORED_AT_TWO_LEVELS, |root| {
+        create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+        let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
+        assert.failure().stdout(ANCHORED_AT_TWO_LEVELS_REPORT);
+        Ok(())
+    })
+}
+
+#[test]
+fn check_reads_each_root_gitignore_when_only_one_is_in_a_repository() -> Result<()> {
+    with_tree(
+        &[
+            ("repo/.git/HEAD", "ref: refs/heads/main\n"),
+            ("repo/.gitignore", "ignored.md\n"),
+            ("repo/ignored.md", "#Hello."),
+            ("archive/.gitignore", "ignored.md\n"),
+            ("archive/ignored.md", "#Hello."),
+        ],
+        |root| {
+            let assert = check_in(root, &["repo", "archive"]).assert();
+            assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_respect_ignore_does_not_depend_on_respect_gitignore() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.ignore", "skipped.md\n"),
+            ("proj/docs/skipped.md", "#Hello."),
+        ],
+        |root| {
+            let proj = root.join("proj");
+            for respect_ignore in [true, false] {
+                for respect_gitignore in [true, false] {
+                    let config = formatdoc! {"
+                        [lint]
+                        respect-ignore = {respect_ignore}
+                        respect-gitignore = {respect_gitignore}
+                    "};
+                    write(proj.join("mado.toml"), config).into_diagnostic()?;
+
+                    // `.ignore` decides this on its own: `respect-gitignore`
+                    // must not move the directories `.ignore` is read from.
+                    let assert = check_in(&proj, &["docs"]).assert();
+                    if respect_ignore {
+                        assert.success();
+                    } else {
+                        assert.failure();
+                    }
+                }
+            }
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_does_not_read_a_gitignore_above_the_current_directory() -> Result<()> {
+    with_tree(
+        &[(".gitignore", "leaked.md\n"), ("proj/leaked.md", "#Hello.")],
+        |root| {
+            let assert = check_in(&root.join("proj"), &["."]).assert();
+            assert.failure().stdout(indoc! {"
+                ./leaked.md:1:1: MD018 No space after hash on atx style header
+                ./leaked.md:1:1: MD041 First line in file should be a top level header
+                ./leaked.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_does_not_read_the_global_git_ignore_file() -> Result<()> {
+    with_tree(
+        &[
+            ("home/.config/git/ignore", "globally-ignored.md\n"),
+            ("proj/globally-ignored.md", "#Hello."),
+        ],
+        |root| {
+            let home = root.join("home");
+            let mut cmd = check_in(&root.join("proj"), &["."]);
+            let assert = cmd
+                .env("HOME", &home)
+                .env("XDG_CONFIG_HOME", home.join(".config"))
+                .assert();
+            assert.failure().stdout(indoc! {"
+                ./globally-ignored.md:1:1: MD018 No space after hash on atx style header
+                ./globally-ignored.md:1:1: MD041 First line in file should be a top level header
+                ./globally-ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
 }

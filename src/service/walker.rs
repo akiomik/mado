@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -12,44 +13,96 @@ use miette::miette;
 pub struct WalkParallelBuilder;
 
 impl WalkParallelBuilder {
-    /// Whether `path` or any of its ancestors holds Git metadata. `.git` is a
-    /// directory in a clone and a file in a worktree or a submodule.
-    fn in_git_repository(path: &Path) -> bool {
-        path.canonicalize()
-            .is_ok_and(|path| path.ancestors().any(|dir| dir.join(".git").exists()))
+    /// Whether `path` or any directory above it holds a repository marker.
+    /// `.git` is a directory in a clone and a file in a worktree or a
+    /// submodule, and `.jj` is the other marker the `ignore` crate stops at.
+    fn in_repository(path: &Path) -> bool {
+        path.canonicalize().is_ok_and(|path| {
+            path.ancestors()
+                .any(|dir| dir.join(".git").exists() || dir.join(".jj").exists())
+        })
     }
 
-    #[inline]
-    pub fn build(
-        patterns: &[PathBuf],
+    /// The directories above `pattern` up to and including the one mado was
+    /// started in, outermost first. Each is named the way `pattern` names it,
+    /// so that the ignore files found there match the paths the walk yields.
+    /// Empty when `pattern` is that directory, or lies outside it.
+    fn ancestors_up_to_current_dir(pattern: &Path) -> Vec<PathBuf> {
+        // A directory mado cannot name is one no pattern can be found under.
+        let current_dir = env::current_dir()
+            .and_then(|dir| dir.canonicalize())
+            .unwrap_or_default();
+        if pattern.canonicalize().is_ok_and(|path| path == current_dir) {
+            return vec![];
+        }
+
+        let mut dirs = vec![];
+        let mut ancestor = pattern.parent();
+        while let Some(dir) = ancestor {
+            // `Path::parent` names the directory a relative path sits in with
+            // the empty path, which no file can be opened under.
+            let named = if dir.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                dir
+            };
+            dirs.push(named.to_path_buf());
+            if named.canonicalize().is_ok_and(|path| path == current_dir) {
+                dirs.reverse();
+                return dirs;
+            }
+            ancestor = dir.parent();
+        }
+
+        vec![]
+    }
+
+    /// Adds `path` as an ignore file rooted at `dir`. `WalkBuilder` roots the
+    /// files it is handed at whatever `current_dir` was last set to, which is
+    /// what lets each directory's patterns keep their own anchoring.
+    fn add_ignore_file(builder: &mut WalkBuilder, dir: &Path, name: &str) {
+        let path = dir.join(name);
+        if path.is_file() {
+            builder.current_dir(dir);
+            drop(builder.add_ignore(path));
+        }
+    }
+
+    fn build_one(
+        pattern: &Path,
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Result<WalkParallel> {
-        let (head_pattern, tail_patterns) = patterns
-            .split_first()
-            .ok_or_else(|| miette!("files must be non-empty"))?;
-        let mut builder = WalkBuilder::new(head_pattern);
-        for pattern in tail_patterns {
-            builder.add(pattern);
-        }
-
+        let mut builder = WalkBuilder::new(pattern);
         builder.ignore(respect_ignore);
         builder.git_ignore(respect_gitignore);
 
         // `respect-gitignore` covers `.gitignore` files and nothing else. The
-        // global Git ignore file and `.git/info/exclude` do not travel with the
-        // tree, so reading them would make the result depend on the machine.
+        // global Git ignore file and `.git/info/exclude` do not travel with
+        // the tree, so reading them would make the result depend on the
+        // machine and on the clone.
         builder.git_global(false);
         builder.git_exclude(false);
 
-        // Outside a repository `ignore` drops `.gitignore` altogether, which
-        // makes the result depend on whether the tree still carries `.git`.
-        // `require_git(false)` applies it anyway, and with no repository root
-        // to stop at, `parents(false)` bounds the search at the given paths
-        // rather than letting it run to the filesystem root.
-        if respect_gitignore && !patterns.iter().any(|p| Self::in_git_repository(p)) {
+        if !Self::in_repository(pattern) {
+            // Outside a repository the walker drops `.gitignore` entirely, and
+            // `require_git(false)` on its own would read ignore files every
+            // directory up to the filesystem root. Stop its parent search and
+            // put back the files between here and the directory mado was
+            // started in, which is the root the rest of mado resolves against.
             builder.require_git(false);
             builder.parents(false);
+
+            for dir in Self::ancestors_up_to_current_dir(pattern) {
+                // Added outermost first, and `.gitignore` before `.ignore`, so
+                // that the nearer file wins where both name the same path.
+                if respect_gitignore {
+                    Self::add_ignore_file(&mut builder, &dir, ".gitignore");
+                }
+                if respect_ignore {
+                    Self::add_ignore_file(&mut builder, &dir, ".ignore");
+                }
+            }
         }
 
         // NOTE: Expect performance improvements with pre-filtering
@@ -61,6 +114,24 @@ impl WalkParallelBuilder {
         builder.types(types);
 
         Ok(builder.build_parallel())
+    }
+
+    /// One walker per pattern: the repository a pattern sits in, and so where
+    /// its search for ignore files stops, is a property of that pattern alone.
+    #[inline]
+    pub fn build(
+        patterns: &[PathBuf],
+        respect_ignore: bool,
+        respect_gitignore: bool,
+    ) -> Result<Vec<WalkParallel>> {
+        if patterns.is_empty() {
+            return Err(miette!("files must be non-empty"));
+        }
+
+        patterns
+            .iter()
+            .map(|pattern| Self::build_one(pattern, respect_ignore, respect_gitignore))
+            .collect()
     }
 }
 
@@ -140,10 +211,12 @@ mod tests {
         respect_gitignore: bool,
     ) -> miette::Result<Vec<PathBuf>> {
         let patterns = vec![root.to_path_buf()];
-        let walker = WalkParallelBuilder::build(&patterns, respect_ignore, respect_gitignore)?;
+        let walkers = WalkParallelBuilder::build(&patterns, respect_ignore, respect_gitignore)?;
         let collector = PathCollector::new();
 
-        walker.run(|| Box::new(collector.gen_visitor()));
+        for walker in walkers {
+            walker.run(|| Box::new(collector.gen_visitor()));
+        }
 
         let mut paths = collector
             .paths()?
@@ -182,10 +255,12 @@ mod tests {
             Path::new("mado.toml").to_path_buf(),
             Path::new("README.md").to_path_buf(),
         ];
-        let builder = WalkParallelBuilder::build(&paths, true, true)?;
+        let walkers = WalkParallelBuilder::build(&paths, true, true)?;
         let collector = PathCollector::new();
 
-        builder.run(|| Box::new(collector.gen_visitor()));
+        for walker in walkers {
+            walker.run(|| Box::new(collector.gen_visitor()));
+        }
 
         let mut actual = collector.paths()?;
         actual.sort();
