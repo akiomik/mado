@@ -19,9 +19,9 @@ parsed and therefore what gets reported.
   ignore file and `.git/info/exclude`, which mado had been reading by inheriting
   the walker's defaults, are no longer consulted. Neither travels with the tree
   being linted (#436)
-- `respect-ignore` and `respect-gitignore` no longer affect each other. Outside
-  a repository, turning `respect-gitignore` on used to change which directories
-  `.ignore` files were read from (#436)
+- **Breaking:** `service::walker::WalkParallelBuilder::build` returns one walker
+  per set of paths that agree on where their search for ignore files stops,
+  rather than a single walker for every path given (#436)
 
 ### Fixed
 

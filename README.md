@@ -170,6 +170,11 @@ search for `.gitignore` files stops is decided for each path given to
 `.ignore` files stop at the same place, except inside a repository, where they
 are read from every parent directory as [ripgrep] reads them.
 
+Where an `.ignore` and a `.gitignore` name the same path, `.ignore` wins. There
+is one exception, and it is a place a clone and an archive of the same tree
+still differ: outside a repository, a `.gitignore` below the path being linted
+wins over an `.ignore` above it.
+
 The global Git ignore file and `.git/info/exclude` are never read: neither
 travels with the tree being linted, so honouring them would make the result
 depend on the machine and on the clone.

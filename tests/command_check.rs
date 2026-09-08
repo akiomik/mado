@@ -411,6 +411,34 @@ fn check_keeps_gitignore_anchoring_per_directory_with_git_metadata() -> Result<(
     })
 }
 
+/// An `.ignore` and a `.gitignore` in different parent directories disagreeing
+/// about the same file. `.ignore` wins wherever either sits, so the file is
+/// dropped and mado has nothing to report.
+const CONFLICTING_KINDS: &[(&str, &str)] = &[
+    ("proj/.ignore", "docs/sub/conflict.md\n"),
+    ("proj/docs/.gitignore", "!sub/conflict.md\n"),
+    ("proj/docs/sub/conflict.md", "#Hello."),
+];
+
+#[test]
+fn check_keeps_ignore_ahead_of_gitignore_without_git_metadata() -> Result<()> {
+    with_tree(CONFLICTING_KINDS, |root| {
+        let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_keeps_ignore_ahead_of_gitignore_with_git_metadata() -> Result<()> {
+    with_tree(CONFLICTING_KINDS, |root| {
+        create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+        let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
 #[test]
 fn check_reads_each_root_gitignore_when_only_one_is_in_a_repository() -> Result<()> {
     with_tree(
