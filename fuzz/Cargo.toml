@@ -21,7 +21,8 @@ path = ".."
 # package for the `false`s below. Everything else that builds default targets
 # reaches it, `cargo clippy --workspace` included, and compiles a vendored
 # libFuzzer with a C++ toolchain on the way. A lib target here would put
-# `libfuzzer-sys` back in all of them; a `tests/` file, in all but `cargo doc`.
+# `libfuzzer-sys` back in all of them; a `tests/` file, in `cargo test` and the
+# coverage run.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"

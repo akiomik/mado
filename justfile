@@ -31,7 +31,7 @@ flamegraph target="scripts/benchmarks/data/gitlab":
 # `cargo fuzz` takes no `--locked`, and a run whose manifests have moved would
 # rewrite the lock CD builds against on its way past, so `cargo metadata
 # --locked` asks first.
-[doc("Fuzz a target, checking the lock first")]
+# Fuzz a target, checking the lock first.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}
