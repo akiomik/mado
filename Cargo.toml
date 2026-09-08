@@ -60,7 +60,8 @@ rand = "0.10"
 serial_test = "3.5"
 tempfile = "3.27"
 
-# Resolved at the workspace root, so `cargo fuzz` builds with this as well.
+# Resolved at the workspace root, so `cargo fuzz` builds with this as well:
+# slower, and with `mado` and `comrak` inlined into each other in a backtrace.
 # Cargo takes no `lto` in a package profile, so opting `fuzz/` out of it would
 # take a profile of its own and a change to what CD builds.
 [profile.release]
