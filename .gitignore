@@ -1,6 +1,8 @@
-# No trailing slash: git reads a `target` symlinked onto another volume as a
-# file, which `/target/` would not match. `/fuzz/target` is what a checkout
-# from before `fuzz/` joined the workspace still has.
+# Anchored, or `target` would match a nested one as well and mado, which skips
+# what git ignores, would stop linting the Markdown under it. No trailing
+# slash: git reads a `target` symlinked onto another volume as a file, which
+# `/target/` would not match. `/fuzz/target` is what a checkout from before
+# `fuzz/` joined the workspace still has.
 /target
 /fuzz/target
 flamegraph.svg
