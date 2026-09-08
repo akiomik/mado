@@ -84,6 +84,7 @@ jobs:
       # looks for and `g++` the package that carries it. `apt-get install`
       # resolves a version out of the image's index, so the guard updates that
       # first.
+      #
       # #428 is the same question for the C compiler every job that compiles
       # needs and none of them asks for.
       - name: Install a C++ toolchain for libfuzzer-sys
