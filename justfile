@@ -29,7 +29,8 @@ flamegraph target="scripts/benchmarks/data/gitlab":
     cargo flamegraph --root --profile bench --open -- check {{ target }}
 
 # `cargo fuzz` takes no `--locked`, so a run whose manifests have moved rewrites
-# the workspace lock on its way past. `cargo metadata --locked` asks first.
+# the lock CD builds against on its way past. `cargo metadata --locked` asks
+# first.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}

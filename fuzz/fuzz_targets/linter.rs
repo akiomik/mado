@@ -15,7 +15,7 @@ fuzz_target!(|text: String| {
     let linter = Linter::new(rules);
     let arena = Arena::new();
     let path = Path::new("test.md").to_path_buf();
-    // A `new` that fails is something a fuzz target wants to hear about.
+    // The `Result` has no `Err` in it: no branch of `Document::new` fails.
     #[allow(clippy::unwrap_used)]
     let doc = Document::new(&arena, path, text).unwrap();
     let _ = linter.check(&doc);

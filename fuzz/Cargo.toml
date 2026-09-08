@@ -17,8 +17,8 @@ comrak.workspace = true
 [dependencies.mado]
 path = ".."
 
-# Without these three, `libfuzzer-sys` and the C++ toolchain its build script
-# compiles are in the graph of every workspace-wide command.
+# `libfuzzer-sys` needs a C++ toolchain to build, and the `false`s below are
+# what keep it out of the graph of every workspace-wide command.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"

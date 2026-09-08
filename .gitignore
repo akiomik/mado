@@ -1,5 +1,6 @@
 # No trailing slash: git reads a `target` symlinked onto another volume as a
-# file, which `/target/` would not match.
+# file, which `/target/` would not match. The second is what a checkout from
+# before `fuzz/` joined the workspace still has.
 /target
 /fuzz/target
 flamegraph.svg
