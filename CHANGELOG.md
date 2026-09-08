@@ -13,6 +13,21 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Changed
+
+- `respect-gitignore` covers `.gitignore` files and nothing else: the global Git
+  ignore file and `.git/info/exclude`, which mado had been reading by inheriting
+  the walker's defaults, are no longer consulted. Neither travels with the tree
+  being linted (#436)
+
+### Fixed
+
+- `respect-gitignore` applies `.gitignore` files whether or not the tree still
+  carries Git metadata, so a source archive or a Docker context copied without
+  `.git` no longer lints everything `.gitignore` lists. Outside a repository
+  mado reads ignore files only at or below the paths it was given; inside one
+  the search still stops at the repository root (#436)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added
