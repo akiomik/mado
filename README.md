@@ -150,6 +150,20 @@ For more details,
 see [the example `mado.toml`](https://github.com/akiomik/mado/blob/main/mado.toml)
 and [the JSON Schema for `mado.toml`](https://github.com/akiomik/mado/blob/main/pkg/json-schema/mado.json).
 
+### Ignore files
+
+`respect-ignore` and `respect-gitignore` decide whether `.ignore` and
+`.gitignore` files exclude what they list. `.gitignore` applies whether or not
+the tree still carries Git metadata, so a clone and a source archive of the same
+tree lint the same files.
+
+The search for ignore files stops at the repository root, as Git does. When no
+`.git` is found, mado reads ignore files only at or below the paths it was
+given, rather than searching up to the filesystem root.
+
+The global Git ignore file and `.git/info/exclude` are never read: neither
+travels with the tree being linted.
+
 ## GitHub Actions
 
 Mado is compatible with GitHub Actions.

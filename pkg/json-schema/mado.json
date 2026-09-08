@@ -11,12 +11,12 @@
       "additionalProperties": false,
       "properties": {
         "respect-ignore": {
-          "description": "Exclude files that are ignored by .ignore",
+          "description": "Exclude files that are ignored by .ignore. When no Git repository is found, only .ignore files at or below the paths being linted are read",
           "type": "boolean",
           "default": true
         },
         "respect-gitignore": {
-          "description": "Exclude files that are ignored by .gitignore",
+          "description": "Exclude files that are ignored by .gitignore, whether or not the tree carries Git metadata. The global Git ignore file and .git/info/exclude are never read",
           "type": "boolean",
           "default": true
         },

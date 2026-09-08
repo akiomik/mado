@@ -1,4 +1,6 @@
 use std::fs::File;
+use std::fs::create_dir;
+use std::fs::write;
 use std::io::Write as _;
 use std::path::PathBuf;
 
@@ -255,6 +257,59 @@ fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
             .args(["check", "--exclude", "./test.md"])
             .assert();
         assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+/// Lays out a tree with a `.gitignore` excluding a directory that holds a
+/// Markdown file mado reports on, and no Git metadata anywhere.
+fn with_gitignored_tree<F>(f: F) -> Result<()>
+where
+    F: FnOnce(&PathBuf) -> Result<()>,
+{
+    let tmp_dir = tempdir().into_diagnostic()?;
+    let root = tmp_dir.path().to_path_buf();
+    create_dir(root.join("target")).into_diagnostic()?;
+    write(root.join(".gitignore"), "target/\n").into_diagnostic()?;
+    write(root.join("target/generated.md"), "#Hello.").into_diagnostic()?;
+
+    f(&root)?;
+
+    tmp_dir.close().into_diagnostic()
+}
+
+#[test]
+fn check_respects_gitignore_without_git_metadata() -> Result<()> {
+    with_gitignored_tree(|root| {
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd.current_dir(root).args(["check", "."]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_without_respect_gitignore_walks_ignored_files() -> Result<()> {
+    with_gitignored_tree(|root| {
+        write(
+            root.join("mado.toml"),
+            "[lint]\nrespect-gitignore = false\n",
+        )
+        .into_diagnostic()?;
+        let mut cmd = Command::new(cargo_bin!("mado"));
+        let assert = cmd
+            .current_dir(root)
+            .env_remove("CLICOLOR_FORCE")
+            .env("NO_COLOR", "1")
+            .args(["check", "."])
+            .assert();
+        assert.failure().stdout(indoc! {"
+            ./target/generated.md:1:1: MD018 No space after hash on atx style header
+            ./target/generated.md:1:1: MD041 First line in file should be a top level header
+            ./target/generated.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
         Ok(())
     })
 }
