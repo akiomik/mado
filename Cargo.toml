@@ -62,7 +62,7 @@ tempfile = "3.27"
 
 # Resolved at the workspace root, so `cargo fuzz` builds with this as well.
 # Cargo takes no `lto` in a package profile, so opting `fuzz/` out of it would
-# take a profile of its own, and CD builds `--release`.
+# take a profile of its own and a change to what CD builds.
 [profile.release]
 lto = "thin"
 
