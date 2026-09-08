@@ -228,10 +228,8 @@ mod tests {
     fn gitignore_with_git_file() -> miette::Result<()> {
         let tmp_dir = TempDir::new().into_diagnostic()?;
         write_tree(tmp_dir.path())?;
-        write(
-            &tmp_dir.path().join(".git"),
-            "gitdir: ../.git/worktrees/tree\n",
-        )?;
+        let git_file = tmp_dir.path().join(".git");
+        write(&git_file, "gitdir: ../.git/worktrees/tree\n")?;
 
         assert_eq!(walk_markdown(tmp_dir.path(), true, true)?, kept());
         tmp_dir.close().into_diagnostic()
