@@ -28,7 +28,7 @@ flamegraph target="scripts/benchmarks/data/gitlab":
     # See https://github.com/flamegraph-rs/flamegraph#dtrace-on-macos
     cargo flamegraph --root --profile bench --open -- check {{ target }}
 
-# Fuzz a target. `cargo fuzz` rewrites CD's lock, so `cargo metadata --locked`.
+# Fuzz a target. `cargo metadata --locked` keeps `cargo fuzz` off CD's lock.
 fuzz target="linter":
     cargo metadata --locked --format-version 1 > /dev/null
     cargo +nightly fuzz run {{ target }}

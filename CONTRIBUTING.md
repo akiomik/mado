@@ -17,9 +17,9 @@ just lint
 `just lint`, and so `just`, needs a C++ toolchain on the machine: it lints the
 whole workspace, which reaches the fuzz target, and `libfuzzer-sys` compiles a
 vendored libFuzzer before anything of mado's is looked at. A machine without one
-fails in `cc`. `just test` does not need a C++ one, for the `false`s in
-`fuzz/Cargo.toml`, and neither does CI's coverage job. CI's Clippy job installs
-`g++` on a runner that has none.
+fails inside that build rather than in anything the change touched. `just test`
+does not need a C++ one, for the `false`s in `fuzz/Cargo.toml`, and neither does
+CI's coverage job. CI's Clippy job installs `g++` on a runner that has none.
 
 ## Changelog
 
