@@ -17,9 +17,8 @@ comrak.workspace = true
 [dependencies.mado]
 path = ".."
 
-# `test`, `doc` and `bench = false` are what keep this package out of `cargo
-# test`, `cargo doc` and the coverage run, and so off the C++ toolchain
-# `libfuzzer-sys` needs.
+# Without these three, `libfuzzer-sys` and the C++ toolchain its build script
+# compiles are in the graph of every workspace-wide command.
 [[bin]]
 name = "linter"
 path = "fuzz_targets/linter.rs"
