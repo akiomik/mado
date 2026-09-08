@@ -103,6 +103,23 @@ mod tests {
 
     use super::*;
 
+    // A bare URL is a link to GFM's autolink extension, and a link splits the
+    // text node it was written in. MD037 matches an emphasis pair inside one
+    // text node, so a pair written around a URL would stop matching if the rule
+    // read a tree the extension had been applied to. Only MD034 reads one.
+    #[test]
+    fn check_errors_with_bare_url_inside_emphasis() -> Result<()> {
+        let text = "x * a http://www.example.com/ b * y".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD037::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 3, 1, 33)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     #[test]
     fn check_errors() -> Result<()> {
         let text = indoc! {"

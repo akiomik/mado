@@ -13,6 +13,42 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** MD034 no longer reports a URL whose scheme GFM does not
+  autolink. `http://`, `https://` and `ftp://` are the ones it does, so
+  `ftps://`, `file://`, `ssh://` and the rest are left alone, none of them being
+  a link a reader is handed. An email address is matched apart from those and
+  carries its own two: a `mailto:foo@example.com` or `xmpp:foo@example.com` is
+  still reported, and from the scheme rather than from the address, that being
+  where GFM starts the link (#418)
+- **Breaking:** MD034 reports the URLs comrak autolinks, which is GFM as mado
+  parses it, and comrak and GitHub disagree in three places. Two are reports
+  lost: a scheme not written in lower case, such as `HTTP://www.example.com/`
+  (#420), and a host with no period in it, such as `http://localhost/x`, the
+  `http://localhost:3000/` a development setup is written with, or the
+  `http://user:pass@www.example.com/` a URL carrying userinfo is — the last two
+  because the host is read up to the `:` and stops there (#421). GitHub links
+  all of them whole; mado reports the userinfo one from its password and the
+  others not at all. One is a report gained: a URL inside link text that follows
+  a nested `]`, as in `[note [1] https://example.com/doc](/x)`, which GitHub
+  leaves inside the link (#422). Each is comrak's to close, and each is pinned
+  by a test that fails when it is (#418)
+- **Breaking:** MD034 no longer reports a URL inside square brackets — a
+  shortcut link, or an image's alt text — GFM autolinking nothing inside of
+  them. This is the report a reversed link `(text)[http://www.example.com/]`
+  used to raise, and mado has no rule of its own for that typo, so it now goes
+  unreported (#418)
+
+### Fixed
+
+- MD034: report the URLs GFM autolinks, rather than every string a URL scanner
+  accepts. `http\://www.example.com/`, which is how a URL is written so that it
+  is *not* autolinked, was reported as one. A `www.` host written without a
+  scheme is autolinked by GFM and is now reported, and a URL is reported to
+  where GFM stops linking it rather than to where a scanner stops reading it
+  (#418)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added
