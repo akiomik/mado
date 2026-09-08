@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -35,29 +36,69 @@ impl WalkParallelBuilder {
         Self::named(pattern.parent().unwrap_or(pattern))
     }
 
-    /// Where the search for ignore files stops for a pattern sitting in `dir`:
-    /// `None` in a repository, where the walker finds the root on its own, and
-    /// otherwise the directories to read ignore files from, outermost first.
-    /// Those run from `current_dir` down to `dir`, and are empty when `dir`
-    /// lies outside `current_dir`, leaving the pattern its own boundary.
-    fn boundary_of(dir: &Path, current_dir: &Path) -> Option<Vec<PathBuf>> {
-        if dir
-            .canonicalize()
-            .is_ok_and(|path| path.ancestors().any(Self::is_repository_root))
-        {
-            return None;
-        }
+    /// Whether `dir` can only name something below the directory it is read
+    /// from, which a relative name that neither starts at the filesystem root
+    /// nor climbs with `..` always does. Answering this without asking the
+    /// filesystem is what keeps a command spread over many directories cheap.
+    fn stays_below(dir: &Path) -> bool {
+        dir.is_relative()
+            && dir
+                .components()
+                .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+    }
 
+    /// The ignore files a pattern sitting in `dir` needs handed back, or
+    /// `None` in a repository, where the walker finds them on its own. They
+    /// come from the directories between `current_dir` and `dir`, and are
+    /// empty when `dir` lies outside `current_dir`, which leaves the pattern
+    /// its own boundary. `above_is_repository` answers for the directories
+    /// over `current_dir`, which no pattern can reach by walking up.
+    fn ignore_files_of(
+        dir: &Path,
+        current_dir: &Path,
+        above_is_repository: bool,
+        respect_ignore: bool,
+        respect_gitignore: bool,
+    ) -> Option<Vec<PathBuf>> {
         let mut dirs = vec![];
         let mut at = dir;
         loop {
             let named = Self::named(at);
-            let reached = named.canonicalize().is_ok_and(|path| path == current_dir);
-            dirs.push(named);
-            if reached {
-                dirs.reverse();
-                return Some(dirs);
+            if Self::is_repository_root(&named) {
+                return None;
             }
+
+            let at_boundary = if named == Path::new(".") {
+                true
+            } else if Self::stays_below(&named) {
+                false
+            } else {
+                match named.canonicalize() {
+                    Ok(canonical) if canonical == *current_dir => true,
+                    Ok(canonical) if canonical.starts_with(current_dir) => false,
+                    // Past the boundary, which a name written with `..` can be
+                    // however far the walk up has left to go.
+                    Ok(canonical) => {
+                        return (!canonical.ancestors().any(Self::is_repository_root))
+                            .then(Vec::new);
+                    }
+                    Err(_) => return Some(vec![]),
+                }
+            };
+
+            dirs.push(named);
+            if at_boundary {
+                if above_is_repository {
+                    return None;
+                }
+                dirs.reverse();
+                return Some(Self::ignore_files_in(
+                    &dirs,
+                    respect_ignore,
+                    respect_gitignore,
+                ));
+            }
+
             // `Path::parent` gives the filesystem root and the empty path
             // themselves, so the walk up has to stop on its own.
             match at.parent() {
@@ -67,24 +108,53 @@ impl WalkParallelBuilder {
         }
     }
 
-    /// `boundary_of` for the directory `pattern` sits in, remembering answers:
-    /// a command naming every file in a directory asks the same question once
-    /// per file.
-    fn boundary_for(
+    /// The ignore files `dirs` hold, in the order to hand them over. Every
+    /// `.gitignore` goes in before any `.ignore` so the kinds stay ranked, and
+    /// each kind outermost first so the nearer file wins within a kind: the
+    /// walker takes the last file it was handed as the one that wins.
+    fn ignore_files_in(
+        dirs: &[PathBuf],
+        respect_ignore: bool,
+        respect_gitignore: bool,
+    ) -> Vec<PathBuf> {
+        [
+            (".gitignore", respect_gitignore),
+            (".ignore", respect_ignore),
+        ]
+        .into_iter()
+        .filter(|&(_, wanted)| wanted)
+        .flat_map(|(name, _)| dirs.iter().map(move |dir| dir.join(name)))
+        .filter(|path| path.is_file())
+        .collect()
+    }
+
+    /// `ignore_files_of` for the directory `pattern` sits in, remembering
+    /// answers: a command naming every file in a directory asks the same
+    /// question once per file.
+    fn ignore_files_for(
         pattern: &Path,
         current_dir: &Path,
+        above_is_repository: bool,
+        respect_ignore: bool,
+        respect_gitignore: bool,
         seen: &mut Vec<(PathBuf, Option<Vec<PathBuf>>)>,
     ) -> Option<Vec<PathBuf>> {
         let dir = Self::directory_of(pattern);
-        let boundary = if let Some((_, boundary)) = seen.iter().find(|(at, _)| *at == dir) {
-            boundary.clone()
+        let files = if let Some((_, files)) = seen.iter().find(|(at, _)| *at == dir) {
+            files.clone()
         } else {
-            let boundary = Self::boundary_of(&dir, current_dir);
-            seen.push((dir, boundary.clone()));
-            boundary
+            let files = Self::ignore_files_of(
+                &dir,
+                current_dir,
+                above_is_repository,
+                respect_ignore,
+                respect_gitignore,
+            );
+            seen.push((dir, files.clone()));
+            files
         };
 
-        boundary.as_ref()?;
+        files.as_ref()?;
         // Both of the questions left are about directories, and a command can
         // name a great many files.
         if pattern.is_dir() {
@@ -94,31 +164,23 @@ impl WalkParallelBuilder {
             }
             // The walk reads the ignore files of a directory it is handed, so
             // for one only what is above it is left to put back.
-            if pattern.canonicalize().is_ok_and(|path| path == current_dir) {
+            if pattern
+                .canonicalize()
+                .is_ok_and(|path| path == *current_dir)
+            {
                 return Some(vec![]);
             }
         }
 
-        boundary
+        files
     }
 
-    /// Adds `path` as an ignore file rooted at `dir`. `WalkBuilder` roots the
-    /// files it is handed at whatever `current_dir` was last set to, which is
-    /// what lets each directory's patterns keep their own anchoring.
-    fn add_ignore_file(builder: &mut WalkBuilder, dir: &Path, name: &str) {
-        let path = dir.join(name);
-        if path.is_file() {
-            builder.current_dir(dir);
-            drop(builder.add_ignore(path));
-        }
-    }
-
-    /// One walker for `patterns`, which share where their search for ignore
-    /// files stops. `ancestors` is the directories to read it from, outermost
-    /// first, or `None` for a repository, where the walker finds them itself.
+    /// One walker for `patterns`, which need the same ignore files handed
+    /// back. `files` is those, in the order to hand them over, or `None` for a
+    /// repository, where the walker finds them itself.
     fn build_group(
         patterns: &[&PathBuf],
-        ancestors: Option<&[PathBuf]>,
+        files: Option<&[PathBuf]>,
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Result<WalkParallel> {
@@ -140,7 +202,7 @@ impl WalkParallelBuilder {
         builder.git_global(false);
         builder.git_exclude(false);
 
-        if let Some(ancestors) = ancestors {
+        if let Some(files) = files {
             // Outside a repository the walker drops `.gitignore` entirely, and
             // `require_git(false)` on its own would read ignore files every
             // directory up to the filesystem root. Stop its parent search and
@@ -148,20 +210,13 @@ impl WalkParallelBuilder {
             builder.require_git(false);
             builder.parents(false);
 
-            // The walker takes the last file added as the one that wins, so
-            // every `.gitignore` goes in before any `.ignore`, and each kind
-            // outermost first. That keeps `.ignore` ahead of `.gitignore`
-            // whatever directory either sits in, and the nearer file ahead of
-            // the further one within a kind.
-            if respect_gitignore {
-                for dir in ancestors {
-                    Self::add_ignore_file(&mut builder, dir, ".gitignore");
-                }
-            }
-            if respect_ignore {
-                for dir in ancestors {
-                    Self::add_ignore_file(&mut builder, dir, ".ignore");
-                }
+            for file in files {
+                // `WalkBuilder` roots the files it is handed at whatever
+                // `current_dir` was last set to, which is what lets each
+                // directory's patterns keep their own anchoring.
+                let dir = Self::named(file.parent().unwrap_or(file));
+                builder.current_dir(dir);
+                drop(builder.add_ignore(file));
             }
         }
 
@@ -176,12 +231,12 @@ impl WalkParallelBuilder {
         Ok(builder.build_parallel())
     }
 
-    /// One walker per set of patterns that share where their search for ignore
-    /// files stops. Where it stops is a property of a single pattern, but
-    /// patterns that agree on it can be walked together.
-    #[inline]
-    pub fn build(
+    /// One walker per set of patterns that need the same ignore files handed
+    /// back. Which files those are is a property of a single pattern, but
+    /// patterns that need the same ones can be walked together.
+    fn build_from(
         patterns: &[PathBuf],
+        current_dir: &Path,
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Result<Vec<WalkParallel>> {
@@ -189,31 +244,47 @@ impl WalkParallelBuilder {
             return Err(miette!("files must be non-empty"));
         }
 
-        // A directory mado cannot name is one no pattern can be found under.
-        let current_dir = env::current_dir()
-            .and_then(|dir| dir.canonicalize())
-            .unwrap_or_default();
+        let above_is_repository = current_dir
+            .ancestors()
+            .skip(1)
+            .any(Self::is_repository_root);
         let mut seen = vec![];
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];
         for pattern in patterns {
-            let boundary = Self::boundary_for(pattern, &current_dir, &mut seen);
-            match groups.iter_mut().find(|(at, _)| *at == boundary) {
+            let files = Self::ignore_files_for(
+                pattern,
+                current_dir,
+                above_is_repository,
+                respect_ignore,
+                respect_gitignore,
+                &mut seen,
+            );
+            match groups.iter_mut().find(|(at, _)| *at == files) {
                 Some((_, members)) => members.push(pattern),
-                None => groups.push((boundary, vec![pattern])),
+                None => groups.push((files, vec![pattern])),
             }
         }
 
         groups
             .iter()
-            .map(|(boundary, members)| {
-                Self::build_group(
-                    members,
-                    boundary.as_deref(),
-                    respect_ignore,
-                    respect_gitignore,
-                )
+            .map(|(files, members)| {
+                Self::build_group(members, files.as_deref(), respect_ignore, respect_gitignore)
             })
             .collect()
+    }
+
+    #[inline]
+    pub fn build(
+        patterns: &[PathBuf],
+        respect_ignore: bool,
+        respect_gitignore: bool,
+    ) -> Result<Vec<WalkParallel>> {
+        // A directory mado cannot name is one no pattern can be found under.
+        let current_dir = env::current_dir()
+            .and_then(|dir| dir.canonicalize())
+            .unwrap_or_default();
+
+        Self::build_from(patterns, &current_dir, respect_ignore, respect_gitignore)
     }
 }
 
@@ -224,6 +295,7 @@ mod tests {
     use alloc::sync::Arc;
     use miette::{Context as _, IntoDiagnostic as _};
     use std::{
+        env,
         ffi::OsStr,
         fs,
         path::{Path, PathBuf},
@@ -292,11 +364,30 @@ mod tests {
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> miette::Result<Vec<PathBuf>> {
+        let current_dir = env::current_dir()
+            .and_then(|dir| dir.canonicalize())
+            .into_diagnostic()?;
+        walk_markdown_from(root, &current_dir, respect_ignore, respect_gitignore)
+    }
+
+    /// `walk_markdown` for a mado started in `current_dir` rather than
+    /// wherever the tests happen to run.
+    fn walk_markdown_from(
+        root: &Path,
+        current_dir: &Path,
+        respect_ignore: bool,
+        respect_gitignore: bool,
+    ) -> miette::Result<Vec<PathBuf>> {
         let patterns = vec![root.to_path_buf()];
-        let walkers = WalkParallelBuilder::build(&patterns, respect_ignore, respect_gitignore)?;
+        let built = WalkParallelBuilder::build_from(
+            &patterns,
+            current_dir,
+            respect_ignore,
+            respect_gitignore,
+        );
         let collector = PathCollector::new();
 
-        for walker in walkers {
+        for walker in built? {
             walker.run(|| Box::new(collector.gen_visitor()));
         }
 
@@ -383,6 +474,94 @@ mod tests {
         let elsewhere_walkers = WalkParallelBuilder::build(&with_elsewhere, true, true)?;
         assert_eq!(elsewhere_walkers.len(), 2);
 
+        tmp_dir.close().into_diagnostic()
+    }
+
+    /// A tree of sibling directories under one boundary, none of them holding
+    /// an ignore file of its own.
+    fn write_siblings(root: &Path, count: usize) -> miette::Result<Vec<PathBuf>> {
+        (0..count)
+            .map(|at| {
+                let path = root.join(format!("d{at}/a.md"));
+                write(&path, "# Fine\n")?;
+                Ok(path)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn build_walks_siblings_under_one_boundary_together() -> miette::Result<()> {
+        let tmp_dir = TempDir::new().into_diagnostic()?;
+        let current_dir = tmp_dir.path().canonicalize().into_diagnostic()?;
+        let patterns = write_siblings(&current_dir, 8)?;
+
+        // Each of these sits in a directory of its own, but they all read the
+        // same ignore files, so one walk covers them however many there are.
+        let shared = WalkParallelBuilder::build_from(&patterns, &current_dir, true, true)?;
+        assert_eq!(shared.len(), 1);
+
+        // One of them holding an ignore file the others must not see splits
+        // that one off, and no more.
+        write(&current_dir.join("d0/.gitignore"), "a.md\n")?;
+        let split = WalkParallelBuilder::build_from(&patterns, &current_dir, true, true)?;
+        assert_eq!(split.len(), 2);
+
+        tmp_dir.close().into_diagnostic()
+    }
+
+    #[test]
+    fn gitignore_up_to_a_repository_root_above_the_boundary() -> miette::Result<()> {
+        let tmp_dir = TempDir::new().into_diagnostic()?;
+        let root = tmp_dir.path().canonicalize().into_diagnostic()?;
+        fs::create_dir(root.join(".git")).into_diagnostic()?;
+        write(&root.join(".gitignore"), "above.md\n")?;
+        let current_dir = root.join("proj");
+        write(&current_dir.join("docs/above.md"), "# Above\n")?;
+        write(&current_dir.join("docs/keep.md"), "# Keep\n")?;
+
+        // The repository holds the directory mado was started in, so its root
+        // is the boundary and its `.gitignore` still counts.
+        let actual = walk_markdown_from(&current_dir.join("docs"), &current_dir, true, true)?;
+        assert_eq!(actual, vec![Path::new("keep.md").to_path_buf()]);
+        tmp_dir.close().into_diagnostic()
+    }
+
+    #[test]
+    fn gitignore_for_a_directory_that_is_not_there() -> miette::Result<()> {
+        let tmp_dir = TempDir::new().into_diagnostic()?;
+        write_tree(tmp_dir.path())?;
+
+        // A path mado cannot look above must not stop the ones it can walk.
+        let patterns = vec![
+            tmp_dir.path().join("missing/a.md"),
+            tmp_dir.path().to_path_buf(),
+        ];
+        let current_dir = tmp_dir.path().canonicalize().into_diagnostic()?;
+        let walkers = WalkParallelBuilder::build_from(&patterns, &current_dir, true, true)?;
+        let collector = PathCollector::new();
+        for walker in walkers {
+            walker.run(|| Box::new(collector.gen_visitor()));
+        }
+        let markdown = collector
+            .paths()?
+            .into_iter()
+            .filter(|path| path.extension() == Some(OsStr::new("md")))
+            .count();
+        assert_eq!(markdown, kept().len());
+        tmp_dir.close().into_diagnostic()
+    }
+
+    #[test]
+    fn gitignore_when_the_boundary_cannot_be_named() -> miette::Result<()> {
+        let tmp_dir = TempDir::new().into_diagnostic()?;
+        write(&tmp_dir.path().join(".gitignore"), "keep.md\n")?;
+        let root = tmp_dir.path().join("project");
+        write_tree(&root)?;
+
+        // With no directory to measure against, every path bounds itself, so
+        // nothing above it is read.
+        let actual = walk_markdown_from(&root, Path::new(""), true, true)?;
+        assert_eq!(actual, kept());
         tmp_dir.close().into_diagnostic()
     }
 

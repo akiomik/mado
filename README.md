@@ -157,8 +157,11 @@ whether `.ignore` and `.gitignore` files exclude what they list. Neither moves
 the directories the other is read from.
 
 `.gitignore` applies whether or not the tree still carries Git metadata, so a
-clone and a source archive of the same tree lint the same files. Where the
-search for `.gitignore` files stops is decided for each path given to
+tree whose ignore files are all `.gitignore` — the usual case — lints the same
+as a clone and as a source archive. Where `.ignore` files are in play as well,
+two differences remain, both noted below.
+
+Where the search for `.gitignore` files stops is decided for each path given to
 `mado check`, in this order:
 
 1. the repository root, if the path sits in one — a `.git` directory, the
@@ -167,13 +170,12 @@ search for `.gitignore` files stops is decided for each path given to
    same directory `mado.toml` is looked for in
 1. otherwise the path itself
 
-`.ignore` files stop at the same place, except inside a repository, where they
-are read from every parent directory as [ripgrep] reads them.
+`.ignore` files stop at the same place, with one difference: inside a
+repository they are read from every parent directory, as [ripgrep] reads them.
 
-Where an `.ignore` and a `.gitignore` name the same path, `.ignore` wins. There
-is one exception, and it is a place a clone and an archive of the same tree
-still differ: outside a repository, a `.gitignore` below the path being linted
-wins over an `.ignore` above it.
+Where an `.ignore` and a `.gitignore` name the same path, `.ignore` wins, with
+one difference the other way: outside a repository, a `.gitignore` below the
+path being linted wins over an `.ignore` above it.
 
 The global Git ignore file and `.git/info/exclude` are never read: neither
 travels with the tree being linted, so honouring them would make the result
