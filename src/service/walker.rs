@@ -158,6 +158,10 @@ impl WalkParallelBuilder {
     /// what it should keep, quietly, and where a clone of the same tree keeps
     /// it. The walker's own arrangement is left to answer instead, which keeps
     /// what it should and reports more besides.
+    ///
+    /// The whole way up is asked, not the part mado hands back: the walker
+    /// reads an `.ignore` however far over the tree it sits, so one that far
+    /// over ranks over a `.gitignore` in it just the same.
     fn taken_back_over(pattern: &Path) -> bool {
         pattern.canonicalize().is_ok_and(|at| {
             at.ancestors()
@@ -208,8 +212,9 @@ impl WalkParallelBuilder {
 
         // Whatever mado does with the files over this one, they end up under
         // what the walk finds for itself, and one of them taking something
-        // back is one the walk would then drop.
-        if respect_gitignore && Self::taken_back_over(pattern) {
+        // back is one the walk would then drop. With `.ignore` files left
+        // unread there is nothing over the walk's own answers to begin with.
+        if respect_ignore && respect_gitignore && Self::taken_back_over(pattern) {
             return None;
         }
         // A name that does not lead where it reads bounds itself: nothing

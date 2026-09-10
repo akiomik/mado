@@ -465,6 +465,20 @@ fn check_keeps_what_an_ignore_file_above_the_path_takes_back_in_a_repository() -
 }
 
 #[test]
+fn check_reads_gitignore_over_an_ignore_file_it_does_not_respect() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        let proj = root.join("proj");
+        write(proj.join("mado.toml"), "[lint]\nrespect-ignore = false\n").into_diagnostic()?;
+
+        // Neither the walk nor mado reads the `.ignore`, so nothing of its
+        // stands over what the walk finds and the `.gitignore` is left to say.
+        let assert = check_in(&proj, &["docs"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
 fn check_keeps_ignore_ahead_of_gitignore_without_git_metadata() -> Result<()> {
     with_tree(CONFLICTING_KINDS, |root| {
         let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
