@@ -479,6 +479,21 @@ fn check_reads_gitignore_over_an_ignore_file_it_does_not_respect() -> Result<()>
 }
 
 #[test]
+fn check_reports_every_file_it_cannot_read() -> Result<()> {
+    with_tree(&[], |root| {
+        // Two files with nothing to tell them apart in what the reader says
+        // about them, and each of them is still a file of its own.
+        write(root.join("a.md"), b"\xff\xfe").into_diagnostic()?;
+        write(root.join("b.md"), b"\xff\xfe").into_diagnostic()?;
+
+        let output = check_in(root, &["."]).output().into_diagnostic()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(stderr.lines().count(), 2);
+        Ok(())
+    })
+}
+
+#[test]
 fn check_reports_a_broken_glob_two_groups_read_once() -> Result<()> {
     with_tree(
         &[

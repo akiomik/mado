@@ -34,9 +34,9 @@ impl MarkdownLintVisitor {
         }
     }
 
-    /// This visitor, sharing `said` as the note of what has been said already.
-    /// A tree is walked a group at a time, and a broken ignore file several
-    /// groups read has as much to say to each of them.
+    /// This visitor, sharing `said` as the note of what the walks have said
+    /// about themselves. A tree is walked a group at a time, and an ignore
+    /// file several groups read has as much to say to each of them.
     #[inline]
     #[must_use]
     pub fn saying_each_thing_once(mut self, said: Arc<Mutex<HashSet<String>>>) -> Self {
@@ -44,21 +44,25 @@ impl MarkdownLintVisitor {
         self
     }
 
-    /// Say `message`, unless it has been said already. A note that cannot be
-    /// read leaves it said again rather than unsaid.
-    fn say(&self, message: &str) {
-        let fresh = self.said.as_ref().is_none_or(|said| {
+    /// Whether `message` is yet to be said. A note that cannot be read leaves
+    /// it said again rather than unsaid: saying a thing twice is the smaller
+    /// fault of the two.
+    fn unsaid(&self, message: &str) -> bool {
+        self.said.as_ref().is_none_or(|said| {
             said.lock()
-                .is_ok_and(|mut said| said.insert(message.to_owned()))
-        });
+                .map_or(true, |mut said| said.insert(message.to_owned()))
+        })
+    }
 
-        if fresh {
+    /// Say what the walk has to say about itself, unless it has been said
+    /// already. What a file has to say is its own and is said either way.
+    fn say_once(&self, message: &str) {
+        if self.unsaid(message) {
             eprintln!("{message}");
         }
     }
 
-    fn visit_inner(&self, either_entry: Result<DirEntry, Error>) -> miette::Result<()> {
-        let entry = either_entry.into_diagnostic()?;
+    fn visit_inner(&self, entry: &DirEntry) -> miette::Result<()> {
         let path = entry.path();
         if path.is_file() && path.extension() == Some("md".as_ref()) {
             // Strip a leading "./" so that exclude patterns match regardless of
@@ -89,10 +93,18 @@ impl MarkdownLintVisitor {
 impl ParallelVisitor for MarkdownLintVisitor {
     #[inline]
     fn visit(&mut self, either_entry: Result<DirEntry, Error>) -> WalkState {
-        if let Err(err) = self.visit_inner(either_entry) {
-            // TODO: Handle errors
-            self.say(&err.to_string());
+        // TODO: Handle errors
+        match either_entry {
+            // The walk speaks here of the files it read to walk by, which are
+            // one file's worth of trouble however many walks read them.
+            Err(err) => self.say_once(&err.to_string()),
+            Ok(entry) => {
+                if let Err(err) = self.visit_inner(&entry) {
+                    eprintln!("{err}");
+                }
+            }
         }
+
         WalkState::Continue
     }
 }
@@ -134,6 +146,7 @@ impl<'s> ParallelVisitorBuilder<'s> for MarkdownLintVisitorFactory {
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
+    use std::thread;
 
     use ignore::Walk;
 
@@ -146,8 +159,8 @@ mod tests {
         let exclusion = GlobSet::empty();
         let visitor = MarkdownLintVisitor::new(linter, exclusion, tx);
 
-        for entry in Walk::new(".") {
-            visitor.visit_inner(entry)?;
+        for entry in Walk::new(".").flatten() {
+            visitor.visit_inner(&entry)?;
         }
 
         drop(visitor);
@@ -162,10 +175,39 @@ mod tests {
         let visitor = MarkdownLintVisitor::new(Linter::new(vec![]), GlobSet::empty(), tx)
             .saying_each_thing_once(Arc::clone(&said));
 
-        visitor.say("one thing");
-        visitor.say("one thing");
+        assert!(visitor.unsaid("one thing"));
+        assert!(!visitor.unsaid("one thing"));
+        assert!(visitor.unsaid("another thing"));
+    }
 
-        assert!(said.lock().is_ok_and(|note| note.len() == 1));
+    #[test]
+    fn markdown_lint_visitor_says_what_it_cannot_take_a_note_of() {
+        let said = Arc::new(Mutex::new(HashSet::new()));
+        let (tx, _rx) = mpsc::sync_channel::<Vec<Violation>>(0);
+        let visitor = MarkdownLintVisitor::new(Linter::new(vec![]), GlobSet::empty(), tx)
+            .saying_each_thing_once(Arc::clone(&said));
+
+        let poisoning = Arc::clone(&said);
+        drop(
+            thread::spawn(move || {
+                let _held = poisoning.lock();
+                panic!("poison the note");
+            })
+            .join(),
+        );
+
+        // The note is unreadable now, and a thing said twice beats one lost.
+        assert!(visitor.unsaid("one thing"));
+        assert!(visitor.unsaid("one thing"));
+    }
+
+    #[test]
+    fn markdown_lint_visitor_without_a_note_says_everything() {
+        let (tx, _rx) = mpsc::sync_channel::<Vec<Violation>>(0);
+        let visitor = MarkdownLintVisitor::new(Linter::new(vec![]), GlobSet::empty(), tx);
+
+        assert!(visitor.unsaid("one thing"));
+        assert!(visitor.unsaid("one thing"));
     }
 
     #[test]
