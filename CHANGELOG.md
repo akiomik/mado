@@ -20,8 +20,8 @@ parsed and therefore what gets reported.
   the walker's defaults, are no longer consulted. Neither travels with the tree
   being linted (#436)
 - **Breaking:** `service::walker::WalkParallelBuilder::build` returns one walker
-  per set of paths that agree on where their search for ignore files stops,
-  rather than a single walker for every path given (#436)
+  per set of paths that need the same ignore files read for them, rather than a
+  single walker for every path given (#436)
 
 ### Fixed
 
