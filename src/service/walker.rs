@@ -34,19 +34,14 @@ impl WalkParallelBuilder {
         }
     }
 
-    /// The directory `path` sits in, named the way `path` names it, or `None`
-    /// at the filesystem root. `Path::parent` drops the last component, which
-    /// walks the wrong way when that component is a `..`.
-    fn parent_of(path: &Path) -> Option<PathBuf> {
+    /// The directory `path` sits in, named the way `path` names it, and `path`
+    /// itself where there is nothing above it. `Path::parent` drops the last
+    /// component, which walks the wrong way when that component is a `..`.
+    fn parent_of(path: &Path) -> PathBuf {
         if matches!(path.components().next_back(), Some(Component::ParentDir)) {
-            return Some(path.join(".."));
+            return path.join("..");
         }
-        path.parent().map(Self::named)
-    }
-
-    /// The directory `pattern` sits in, named the way `pattern` names it.
-    fn directory_of(pattern: &Path) -> PathBuf {
-        Self::parent_of(pattern).unwrap_or_else(|| Self::named(pattern))
+        path.parent().map_or_else(|| Self::named(path), Self::named)
     }
 
     /// Whether `dir` can only name something below the directory it is read
@@ -97,6 +92,7 @@ impl WalkParallelBuilder {
                 return None;
             }
 
+            let parent = Self::parent_of(&at);
             let at_boundary = if at == Path::new(".") {
                 true
             } else if Self::stays_below(&at) {
@@ -104,10 +100,11 @@ impl WalkParallelBuilder {
             } else {
                 match at.canonicalize() {
                     Ok(canonical) if canonical == *current_dir => true,
-                    Ok(canonical) if canonical.starts_with(current_dir) => false,
+                    Ok(canonical) if canonical.starts_with(current_dir) && parent != at => false,
                     // Past the boundary, which a name written with `..` can be
-                    // however far the walk up has left to go, or gone.
-                    _ => return Self::bounds_itself(&at),
+                    // however far the walk up has left to go, and the root of
+                    // a tree the boundary is not in always is.
+                    _ => break,
                 }
             };
 
@@ -124,11 +121,10 @@ impl WalkParallelBuilder {
                 ));
             }
 
-            match Self::parent_of(&at) {
-                Some(parent) if parent != at => at = parent,
-                _ => return Self::bounds_itself(&at),
-            }
+            at = parent;
         }
+
+        Self::bounds_itself(&at)
     }
 
     /// The ignore files `dirs` hold, in the order to hand them over. Every
@@ -169,7 +165,7 @@ impl WalkParallelBuilder {
             return Some(vec![]);
         }
 
-        let dir = Self::directory_of(pattern);
+        let dir = Self::parent_of(pattern);
         let files = if let Some((_, files)) = seen.iter().find(|(at, _)| *at == dir) {
             files.clone()
         } else {
