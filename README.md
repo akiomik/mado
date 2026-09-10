@@ -186,11 +186,11 @@ repository they are read from every parent directory, as [ripgrep] reads them.
 
 Where an `.ignore` and a `.gitignore` name the same path, `.ignore` wins, with
 one difference the other way: outside a repository, a `.gitignore` below the
-path being linted wins over an `.ignore` above it. Where that `.ignore` takes
-something back — a line opening with a `!` — the difference would be mado
-excluding a file a clone keeps, so outside a repository `.gitignore` files are
-left to Git's own rule there and go unread, as they did before mado read them
-without one.
+path being linted wins over an `.ignore` above it. Where an `.ignore` over the
+path takes something back — a line opening with a `!` — the difference would
+be mado excluding a file a clone keeps, so `.gitignore` files are left to
+Git's own rule there and go unread outside a repository, as they did before
+mado read them without one.
 
 The global Git ignore file and `.git/info/exclude` are never read: neither
 travels with the tree being linted, so honouring them would make the result
