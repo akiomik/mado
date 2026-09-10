@@ -254,18 +254,15 @@ impl WalkParallelBuilder {
                 // `current_dir` was last set to, which is what lets each
                 // directory's patterns keep their own anchoring.
                 let dir = Self::named(file.parent().unwrap_or(file));
-                // The walker reads what is over a root itself, and reports the
-                // globs it cannot parse there, so long as it has a
-                // `.gitignore` to go looking for. It never reads over a root
-                // it has no reason to look above, and never reads a file that
-                // sits at a root rather than over it, and what it does not
-                // read it cannot report.
-                let told_by_the_walker =
-                    respect_gitignore && patterns.iter().any(|pattern| Self::named(pattern) != dir);
-
                 builder.current_dir(dir);
+                // The walker reads what is over a root itself, and reports the
+                // globs it cannot parse there, whenever it has a `.gitignore`
+                // to go looking for. Without one it never looks up there, and
+                // this reading is the only one those files get. What it makes
+                // of a file at a root rather than over one it keeps to itself,
+                // here as on `main`.
                 if let Some(err) = builder.add_ignore(file)
-                    && !told_by_the_walker
+                    && !respect_gitignore
                     && !err.is_io()
                 {
                     // Two groups can name one file two ways, and it is still

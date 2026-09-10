@@ -707,6 +707,21 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file() -> Result<()> {
 }
 
 #[test]
+fn check_leaves_a_broken_glob_the_walk_reads_to_the_walk() -> Result<()> {
+    with_tree(
+        &[(".gitignore", "{a\n"), ("docs/a.md", "# Fine\n")],
+        |root| {
+            // What the walk reads it reports for itself, and what it makes of a
+            // file at a root rather than over one it keeps to itself. mado says
+            // neither of those over again.
+            let assert = check_in(root, &["."]).assert();
+            assert.success().stderr("");
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
     with_tree(
         &[
@@ -733,22 +748,6 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
                 .filter(|line| line.contains("error parsing glob"))
                 .count();
             assert_eq!(complaints, 1);
-            Ok(())
-        },
-    )
-}
-
-#[test]
-fn check_reports_a_broken_glob_in_the_ignore_file_at_the_path_it_was_given() -> Result<()> {
-    with_tree(
-        &[(".gitignore", "{a\n"), ("docs/a.md", "# Fine\n")],
-        |root| {
-            // The walk reads what is over a root, not what is at one, so mado is
-            // the only reader of this file left to say what it could not parse.
-            let assert = check_in(root, &["."]).assert();
-            assert.success().stderr(indoc! {"
-            ./.gitignore: line 1: error parsing glob '{a': unclosed alternate group; missing '}' (maybe escape '{' with '[{]'?)
-        "});
             Ok(())
         },
     )

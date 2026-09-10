@@ -29,9 +29,6 @@ parsed and therefore what gets reported.
 
 ### Fixed
 
-- A glob mado cannot parse in the ignore file of the directory `mado check` was
-  given is reported, as one in a directory above it already was. The rest of
-  that file applies either way (#436)
 - `respect-gitignore` applies `.gitignore` files whether or not the tree still
   carries Git metadata, so a source archive or a Docker context copied without
   `.git` no longer lints everything `.gitignore` lists. The search for them
