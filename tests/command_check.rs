@@ -491,6 +491,50 @@ fn check_respect_ignore_does_not_depend_on_respect_gitignore() -> Result<()> {
 }
 
 #[test]
+fn check_does_not_read_the_current_directory_gitignore_for_a_path_above_it() -> Result<()> {
+    with_tree(
+        &[
+            ("outer/above.md", "#Hello."),
+            ("outer/proj/.gitignore", "above.md\n"),
+            ("outer/proj/keep.md", "# Fine\n"),
+        ],
+        |root| {
+            // `..` climbs out of the directory mado was started in, so that
+            // directory's `.gitignore` has nothing to say about what is there.
+            let assert = check_in(&root.join("outer/proj"), &[".."]).assert();
+            assert.failure().stdout(indoc! {"
+                ../above.md:1:1: MD018 No space after hash on atx style header
+                ../above.md:1:1: MD041 First line in file should be a top level header
+                ../above.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_lints_a_file_it_is_handed_though_gitignore_lists_it() -> Result<()> {
+    with_tree(
+        &[(".gitignore", "ignored.md\n"), ("ignored.md", "#Hello.")],
+        |root| {
+            // Naming a file is asking for it, and the walk hands one back
+            // without asking any ignore file about it.
+            let assert = check_in(root, &["ignored.md"]).assert();
+            assert.failure().stdout(indoc! {"
+                ignored.md:1:1: MD018 No space after hash on atx style header
+                ignored.md:1:1: MD041 First line in file should be a top level header
+                ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn check_does_not_read_a_gitignore_above_the_current_directory() -> Result<()> {
     with_tree(
         &[(".gitignore", "leaked.md\n"), ("proj/leaked.md", "#Hello.")],

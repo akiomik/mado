@@ -31,9 +31,19 @@ impl WalkParallelBuilder {
         }
     }
 
+    /// The directory `path` sits in, named the way `path` names it, or `None`
+    /// at the filesystem root. `Path::parent` drops the last component, which
+    /// walks the wrong way when that component is a `..`.
+    fn parent_of(path: &Path) -> Option<PathBuf> {
+        if matches!(path.components().next_back(), Some(Component::ParentDir)) {
+            return Some(path.join(".."));
+        }
+        path.parent().map(Self::named)
+    }
+
     /// The directory `pattern` sits in, named the way `pattern` names it.
     fn directory_of(pattern: &Path) -> PathBuf {
-        Self::named(pattern.parent().unwrap_or(pattern))
+        Self::parent_of(pattern).unwrap_or_else(|| Self::named(pattern))
     }
 
     /// Whether `dir` can only name something below the directory it is read
@@ -61,32 +71,31 @@ impl WalkParallelBuilder {
         respect_gitignore: bool,
     ) -> Option<Vec<PathBuf>> {
         let mut dirs = vec![];
-        let mut at = dir;
+        let mut at = dir.to_path_buf();
         loop {
-            let named = Self::named(at);
-            if Self::is_repository_root(&named) {
+            if Self::is_repository_root(&at) {
                 return None;
             }
 
-            let at_boundary = if named == Path::new(".") {
+            let at_boundary = if at == Path::new(".") {
                 true
-            } else if Self::stays_below(&named) {
+            } else if Self::stays_below(&at) {
                 false
             } else {
-                match named.canonicalize() {
+                match at.canonicalize() {
                     Ok(canonical) if canonical == *current_dir => true,
                     Ok(canonical) if canonical.starts_with(current_dir) => false,
                     // Past the boundary, which a name written with `..` can be
-                    // however far the walk up has left to go.
-                    Ok(canonical) => {
-                        return (!canonical.ancestors().any(Self::is_repository_root))
-                            .then(Vec::new);
+                    // however far the walk up has left to go, or gone.
+                    canonical => {
+                        let in_repository = canonical
+                            .is_ok_and(|path| path.ancestors().any(Self::is_repository_root));
+                        return (!in_repository).then(Vec::new);
                     }
-                    Err(_) => return Some(vec![]),
                 }
             };
 
-            dirs.push(named);
+            dirs.push(at.clone());
             if at_boundary {
                 if above_is_repository {
                     return None;
@@ -99,9 +108,7 @@ impl WalkParallelBuilder {
                 ));
             }
 
-            // `Path::parent` gives the filesystem root and the empty path
-            // themselves, so the walk up has to stop on its own.
-            match at.parent() {
+            match Self::parent_of(&at) {
                 Some(parent) if parent != at => at = parent,
                 _ => return Some(vec![]),
             }
@@ -139,6 +146,13 @@ impl WalkParallelBuilder {
         respect_gitignore: bool,
         seen: &mut Vec<(PathBuf, Option<Vec<PathBuf>>)>,
     ) -> Option<Vec<PathBuf>> {
+        // The walk hands back a path that is not a directory without asking
+        // any ignore file about it, so reading them for one cannot change what
+        // it reports, and a command can name a great many files.
+        if !pattern.is_dir() {
+            return Some(vec![]);
+        }
+
         let dir = Self::directory_of(pattern);
         let files = if let Some((_, files)) = seen.iter().find(|(at, _)| *at == dir) {
             files.clone()
@@ -155,21 +169,17 @@ impl WalkParallelBuilder {
         };
 
         files.as_ref()?;
-        // Both of the questions left are about directories, and a command can
-        // name a great many files.
-        if pattern.is_dir() {
-            // A pattern that is a repository root is in one, whatever holds it.
-            if Self::is_repository_root(pattern) {
-                return None;
-            }
-            // The walk reads the ignore files of a directory it is handed, so
-            // for one only what is above it is left to put back.
-            if pattern
-                .canonicalize()
-                .is_ok_and(|path| path == *current_dir)
-            {
-                return Some(vec![]);
-            }
+        // A pattern that is a repository root is in one, whatever holds it.
+        if Self::is_repository_root(pattern) {
+            return None;
+        }
+        // The walk reads the ignore files of a directory it is handed, so for
+        // one only what is above it is left to put back.
+        if pattern
+            .canonicalize()
+            .is_ok_and(|path| path == *current_dir)
+        {
+            return Some(vec![]);
         }
 
         files
@@ -216,6 +226,9 @@ impl WalkParallelBuilder {
                 // directory's patterns keep their own anchoring.
                 let dir = Self::named(file.parent().unwrap_or(file));
                 builder.current_dir(dir);
+                // The walker reads every one of these on its own to answer
+                // about the paths above the boundary, and reports what it
+                // cannot parse, so the copy handed back here says nothing.
                 drop(builder.add_ignore(file));
             }
         }
@@ -458,32 +471,32 @@ mod tests {
         let tmp_dir = TempDir::new().into_diagnostic()?;
         write_tree(tmp_dir.path())?;
 
-        // Every file mado is run from sits in one directory, so one walk
-        // covers them all however many are named.
+        // Nothing has to be read for a file, so one walk covers them all.
         let alongside = vec![
             Path::new("README.md").to_path_buf(),
             Path::new("CHANGELOG.md").to_path_buf(),
-            Path::new("mado.toml").to_path_buf(),
+            tmp_dir.path().join("keep.md"),
         ];
         let alongside_walkers = WalkParallelBuilder::build(&alongside, true, true)?;
         assert_eq!(alongside_walkers.len(), 1);
 
-        // A tree elsewhere answers differently and gets its own walk.
-        let mut with_elsewhere = alongside;
-        with_elsewhere.push(tmp_dir.path().to_path_buf());
-        let elsewhere_walkers = WalkParallelBuilder::build(&with_elsewhere, true, true)?;
-        assert_eq!(elsewhere_walkers.len(), 2);
+        // A directory has to be answered for, and answers differently from a
+        // file, so it gets its own walk.
+        let mut with_directory = alongside;
+        with_directory.push(Path::new("action").to_path_buf());
+        let directory_walkers = WalkParallelBuilder::build(&with_directory, true, true)?;
+        assert_eq!(directory_walkers.len(), 2);
 
         tmp_dir.close().into_diagnostic()
     }
 
-    /// A tree of sibling directories under one boundary, none of them holding
-    /// an ignore file of its own.
+    /// A tree of sibling directories under one boundary, each holding a
+    /// directory to lint and none of them an ignore file of its own.
     fn write_siblings(root: &Path, count: usize) -> miette::Result<Vec<PathBuf>> {
         (0..count)
             .map(|at| {
-                let path = root.join(format!("d{at}/a.md"));
-                write(&path, "# Fine\n")?;
+                let path = root.join(format!("d{at}/sub"));
+                write(&path.join("a.md"), "# Fine\n")?;
                 Ok(path)
             })
             .collect()
@@ -510,6 +523,25 @@ mod tests {
     }
 
     #[test]
+    fn build_walks_every_named_file_together() -> miette::Result<()> {
+        let tmp_dir = TempDir::new().into_diagnostic()?;
+        let current_dir = tmp_dir.path().canonicalize().into_diagnostic()?;
+        write_siblings(&current_dir, 8)?;
+        write(&current_dir.join("d0/.gitignore"), "a.md\n")?;
+
+        // The walk hands a path that is not a directory back without asking
+        // any ignore file about it, so no file needs one read for it and they
+        // all belong to the same walk, whatever directories they sit in.
+        let patterns: Vec<PathBuf> = (0..8)
+            .map(|at| current_dir.join(format!("d{at}/sub/a.md")))
+            .collect();
+        let walkers = WalkParallelBuilder::build_from(&patterns, &current_dir, true, true)?;
+        assert_eq!(walkers.len(), 1);
+
+        tmp_dir.close().into_diagnostic()
+    }
+
+    #[test]
     fn gitignore_up_to_a_repository_root_above_the_boundary() -> miette::Result<()> {
         let tmp_dir = TempDir::new().into_diagnostic()?;
         let root = tmp_dir.path().canonicalize().into_diagnostic()?;
@@ -527,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn gitignore_for_a_directory_that_is_not_there() -> miette::Result<()> {
+    fn gitignore_for_a_path_that_is_not_there() -> miette::Result<()> {
         let tmp_dir = TempDir::new().into_diagnostic()?;
         write_tree(tmp_dir.path())?;
 
