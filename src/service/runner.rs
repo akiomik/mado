@@ -74,16 +74,16 @@ impl ParallelLintRunner {
         // Each walk holds its visitor for as long as it runs, so the groups
         // run in batches of as many as the machine has to give, one visitor
         // apiece, rather than one after another.
-        let concurrency = walks_at_once(thread_budget(), self.walkers.len());
+        // One walk at a time at the very least, whatever the count came out as:
+        // a batch of none would leave the loop turning without moving, and a
+        // walk the batch has no visitor for would go unwalked without a word.
+        let at_once = walks_at_once(thread_budget(), self.walkers.len()).max(1);
         let mut remaining = self.walkers;
-        let mut builders = (0..concurrency.min(remaining.len()))
+        let mut builders = (0..at_once.min(remaining.len()))
             .map(|_| MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone()))
             .collect::<Result<Vec<_>>>()?;
         while !remaining.is_empty() {
-            // One a batch at the very least, whatever the count came out as:
-            // a batch of none would leave the loop turning without moving.
-            let batch = remaining.len().min(concurrency).max(1);
-            let rest = remaining.split_off(batch);
+            let rest = remaining.split_off(remaining.len().min(at_once));
             thread::scope(|scope| {
                 for (walker, builder) in remaining.into_iter().zip(builders.iter_mut()) {
                     scope.spawn(move || walker.visit(builder));

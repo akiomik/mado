@@ -27,7 +27,13 @@ pub(crate) fn thread_budget() -> usize {
 
 /// How many of `walks` walks may run alongside each other on `budget` threads.
 pub(crate) fn walks_at_once(budget: usize, walks: usize) -> usize {
-    walks.min(budget).max(1)
+    #[expect(
+        clippy::integer_division_remainder_used,
+        reason = "sharing a budget out is what division is for, and what is left over is meant to be dropped"
+    )]
+    let at_once = budget / threads_per_walk(budget, walks).max(1);
+
+    at_once.min(walks).max(1)
 }
 
 /// What one walk may spend on itself where a command makes `walks` of them, and
@@ -42,7 +48,7 @@ pub(crate) fn threads_per_walk(budget: usize, walks: usize) -> usize {
         clippy::integer_division_remainder_used,
         reason = "sharing a budget out is what division is for, and what is left over is meant to be dropped"
     )]
-    let threads = budget / walks_at_once(budget, walks);
+    let threads = budget / walks.div_ceil(budget.max(1));
 
     threads.max(1)
 }
@@ -564,6 +570,11 @@ mod tests {
 
     #[test]
     fn walks_never_spend_more_than_one_of_them_would() {
+        // The runner leans on there being one to run, and asks for one of its
+        // own besides.
+        assert!(walks_at_once(0, 0) >= 1);
+        assert!(walks_at_once(0, 8) >= 1);
+
         for budget in [1_usize, 2, 8, 10, 12] {
             // One walk is left to spend what the walker would have on it.
             assert_eq!(threads_per_walk(budget, 1), 0);
