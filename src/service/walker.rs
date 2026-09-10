@@ -1,6 +1,5 @@
 use core::num::NonZero;
 use std::env;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::thread;
@@ -80,12 +79,8 @@ impl WalkParallelBuilder {
     }
 
     /// The directory `path` sits in, named the way `path` names it, and `path`
-    /// itself where there is nothing above it. `Path::parent` drops the last
-    /// component, which walks the wrong way when that component is a `..`.
+    /// itself where there is nothing above it.
     fn parent_of(path: &Path) -> PathBuf {
-        if matches!(path.components().next_back(), Some(Component::ParentDir)) {
-            return path.join("..");
-        }
         path.parent().map_or_else(|| Self::named(path), Self::named)
     }
 
@@ -106,6 +101,9 @@ impl WalkParallelBuilder {
     /// empty when `dir` lies outside `current_dir`, which leaves the pattern
     /// its own boundary. `above_is_repository` answers for the directories
     /// over `current_dir`, which no pattern can reach by walking up.
+    ///
+    /// Every name that gets here leads where it reads, so where each step
+    /// stands can be read off the name rather than asked after.
     fn ignore_files_of(
         dir: &Path,
         current_dir: &Path,
@@ -113,36 +111,15 @@ impl WalkParallelBuilder {
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Option<Vec<PathBuf>> {
-        // A directory mado cannot name is one nothing can be found under, so
-        // no path has a boundary over it to walk up to and read from.
-        if current_dir.as_os_str().is_empty() {
-            return Self::bounds_itself(dir);
-        }
-
         let mut dirs = vec![];
-        let mut at = dir.to_path_buf();
-        loop {
-            if Self::is_repository_root(&at) {
+        for at in dir.ancestors() {
+            let named = Self::named(at);
+            if Self::is_repository_root(&named) {
                 return None;
             }
 
-            let parent = Self::parent_of(&at);
-            let at_boundary = if at == Path::new(".") {
-                true
-            } else if Self::stays_below(&at) {
-                false
-            } else {
-                match at.canonicalize() {
-                    Ok(canonical) if canonical == *current_dir => true,
-                    Ok(canonical) if canonical.starts_with(current_dir) && parent != at => false,
-                    // Past the boundary, which a name written with `..` can be
-                    // however far the walk up has left to go, and the root of
-                    // a tree the boundary is not in always is.
-                    _ => break,
-                }
-            };
-
-            dirs.push(at.clone());
+            let at_boundary = named == *current_dir || named == Path::new(".");
+            dirs.push(named);
             if at_boundary {
                 if above_is_repository {
                     return None;
@@ -154,11 +131,11 @@ impl WalkParallelBuilder {
                     respect_gitignore,
                 ));
             }
-
-            at = parent;
         }
 
-        Self::bounds_itself(&at)
+        // The walk up ran out without meeting the boundary, so `dir` is not
+        // under it and the pattern is bounded by itself.
+        Self::bounds_itself(dir)
     }
 
     /// The ignore files `dirs` hold, in the order to hand them over. Every
@@ -199,6 +176,13 @@ impl WalkParallelBuilder {
             return Some(vec![]);
         }
 
+        // A name that does not lead where it reads bounds itself: nothing
+        // above it can be rooted at a name the walk's answers begin with. That
+        // covers `mado check .`, whose own files the walk reads for itself.
+        if !Self::leads_where_it_reads(pattern, current_dir) {
+            return Self::bounds_itself(pattern);
+        }
+
         let dir = Self::parent_of(pattern);
         let files = if let Some((_, files)) = seen.iter().find(|(at, _)| *at == dir) {
             files.clone()
@@ -220,17 +204,7 @@ impl WalkParallelBuilder {
             return None;
         }
 
-        // The walk descends into the pattern, so its own last step counts as
-        // much as the ones above it: a name that leaves the boundary anywhere
-        // along its length is bounded by itself, not by what it was written
-        // under.
-        match pattern.canonicalize() {
-            // The walk reads the ignore files of a directory it is handed, so
-            // for the boundary itself only what is above is left to put back.
-            Ok(at) if at == *current_dir => Some(vec![]),
-            Ok(at) if at.starts_with(current_dir) => files,
-            _ => Self::bounds_itself(pattern),
-        }
+        files
     }
 
     /// One walker for `patterns`, which need the same ignore files handed
@@ -305,60 +279,18 @@ impl WalkParallelBuilder {
         Ok(builder.build_parallel())
     }
 
-    /// Whether `dir` can only name something below the directory it is read
-    /// from. A relative name that neither starts at the filesystem root nor
-    /// climbs with `..` does, so long as no step of it is a link, which could
-    /// lead anywhere. Answering it this way costs a look at each step rather
-    /// than a resolution of the whole name.
-    fn stays_below(dir: &Path) -> bool {
-        if dir.is_absolute() {
-            return false;
-        }
+    /// Whether `pattern` leads where it reads: the walk answers with names
+    /// built by joining onto it, and `Gitignore` strips the root it was given
+    /// as a string, so an ignore file above a name can only be rooted at one
+    /// the walk's answers begin with. A `.`, a `..` or a link anywhere in a
+    /// name breaks that; a leading `./` does not, since the walker takes one
+    /// off a name it is matching before it looks at the root.
+    fn leads_where_it_reads(pattern: &Path, current_dir: &Path) -> bool {
+        let plain = pattern.strip_prefix(".").unwrap_or(pattern);
 
-        let mut at = PathBuf::new();
-        for component in dir.components() {
-            match component {
-                Component::CurDir => continue,
-                Component::Normal(step) => at.push(step),
-                _ => return false,
-            }
-
-            if at.symlink_metadata().is_ok_and(|step| step.is_symlink()) {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// `pattern` with the steps that lead nowhere left out: the `.`s, and the
-    /// `..`s that undo a directory that is one rather than a link to one. A
-    /// walk names what it finds by joining onto the name it was given, so
-    /// `d1/docs/../docs` has it answering about `d1/docs/../docs/a.md`, and no
-    /// ignore file above it can be rooted at a name that lines that up.
-    fn without_idle_steps(pattern: &Path) -> PathBuf {
-        let mut kept: Vec<Component<'_>> = vec![];
-        for component in pattern.components() {
-            // A `..` after a link undoes where the link led, not the name
-            // before it, so only a directory of its own can be dropped here.
-            let undoes_a_directory = component == Component::ParentDir
-                && matches!(kept.last(), Some(Component::Normal(_)))
-                && kept
-                    .iter()
-                    .collect::<PathBuf>()
-                    .symlink_metadata()
-                    .is_ok_and(|at| at.is_dir());
-
-            if undoes_a_directory {
-                kept.pop();
-            } else {
-                kept.push(component);
-            }
-        }
-
-        // A name that undoes itself, such as `docs/..`, names the directory
-        // mado was started in, and the walk has to be given one to open.
-        Self::named(&kept.iter().collect::<PathBuf>())
+        pattern
+            .canonicalize()
+            .is_ok_and(|at| at.as_os_str() == current_dir.join(plain).as_os_str())
     }
 
     /// One walker per set of patterns that need the same ignore files handed
@@ -392,13 +324,9 @@ impl WalkParallelBuilder {
             .ancestors()
             .skip(1)
             .any(Self::is_repository_root);
-        let patterns: Vec<PathBuf> = patterns
-            .iter()
-            .map(|p| Self::without_idle_steps(p))
-            .collect();
         let mut seen = vec![];
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];
-        for pattern in &patterns {
+        for pattern in patterns {
             let files = Self::ignore_files_for(
                 pattern,
                 current_dir,
@@ -773,8 +701,11 @@ mod tests {
     #[test]
     fn gitignore_when_the_boundary_cannot_be_named() -> miette::Result<()> {
         let tmp_dir = TempDir::new().into_diagnostic()?;
-        write(&tmp_dir.path().join(".gitignore"), "keep.md\n")?;
-        let root = tmp_dir.path().join("project");
+        // Canonical, so the name leads where it reads and the walk up is the
+        // thing that runs out rather than the reading of the name.
+        let at = tmp_dir.path().canonicalize().into_diagnostic()?;
+        write(&at.join(".gitignore"), "keep.md\n")?;
+        let root = at.join("project");
         write_tree(&root)?;
 
         // With no directory to measure against, every path bounds itself, so

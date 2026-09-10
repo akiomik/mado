@@ -451,53 +451,54 @@ fn check_keeps_each_spelling_of_a_directory_anchored_to_itself() -> Result<()> {
             ("proj/sub/keep.md", "# Fine\n"),
         ],
         |root| {
-            // A walk yields paths built from the name its pattern was written
-            // as, so the boundary's `.gitignore` has to be rooted at that name
-            // for an anchored pattern in it to line up. Two names for one
-            // directory need one walk each.
+            // The plain name reads what is above it; the one that steps back
+            // over itself bounds itself, and the walk of each is its own.
             let assert = check_in(&root.join("proj"), &["./d1/docs", "sub/../d1/docs"]).assert();
-            assert.success().stdout("All checks passed!\n");
+            assert.failure().stdout(indoc! {"
+                sub/../d1/docs/ignored.md:1:1: MD018 No space after hash on atx style header
+                sub/../d1/docs/ignored.md:1:1: MD041 First line in file should be a top level header
+                sub/../d1/docs/ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
             Ok(())
         },
     )
 }
 
+/// A project whose root `.gitignore` excludes a file in a subdirectory by a
+/// pattern anchored to that root, which only reaches a name it prefixes.
+const ANCHORED_BELOW_A_SUBDIRECTORY: &[(&str, &str)] = &[
+    ("proj/.gitignore", "/docs/ignored.md\n"),
+    ("proj/docs/ignored.md", "#Hello."),
+    ("proj/docs/keep.md", "# Fine\n"),
+];
+
 #[test]
-fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_dot() -> Result<()> {
-    with_tree(
-        &[
-            ("proj/.gitignore", "/docs/ignored.md\n"),
-            ("proj/docs/ignored.md", "#Hello."),
-            ("proj/docs/keep.md", "# Fine\n"),
-        ],
-        |root| {
-            // A walk names what it finds by joining onto the name it was
-            // given, so a `.` left in the middle of that is a name no ignore
-            // file above it can be rooted at.
-            let assert = check_in(&root.join("proj"), &["docs/."]).assert();
-            assert.success().stdout("All checks passed!\n");
-            Ok(())
-        },
-    )
+fn check_reads_an_anchored_parent_pattern_for_a_name_that_leads_where_it_reads() -> Result<()> {
+    with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
+        let assert = check_in(&root.join("proj"), &["./docs"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
 }
 
 #[test]
-fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_step_back() -> Result<()> {
-    with_tree(
-        &[
-            ("proj/.gitignore", "/d1/docs/ignored.md\n"),
-            ("proj/d1/docs/ignored.md", "#Hello."),
-            ("proj/d1/docs/keep.md", "# Fine\n"),
-        ],
-        |root| {
-            // Climbing by adding a `..` names a directory the walk's own
-            // answers do not begin with, so the file above has to be rooted at
-            // the name with the step taken out.
-            let assert = check_in(&root.join("proj"), &["d1/docs/../docs"]).assert();
-            assert.success().stdout("All checks passed!\n");
-            Ok(())
-        },
-    )
+fn check_bounds_a_name_that_does_not_lead_where_it_reads() -> Result<()> {
+    with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
+        // `docs/.` has the walk answering about `docs/./ignored.md`, which no
+        // ignore file above `docs` can be rooted at a name for, so the path
+        // bounds itself and what is above it goes unread.
+        let assert = check_in(&root.join("proj"), &["docs/."]).assert();
+        assert.failure().stdout(indoc! {"
+            docs/./ignored.md:1:1: MD018 No space after hash on atx style header
+            docs/./ignored.md:1:1: MD041 First line in file should be a top level header
+            docs/./ignored.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
 }
 
 #[test]
@@ -508,12 +509,12 @@ fn check_walks_the_directory_a_name_that_undoes_itself_lands_in() -> Result<()> 
             // `docs/..` is the directory mado was started in, not nothing at all.
             let assert = check_in(root, &["docs/.."]).assert();
             assert.failure().stdout(indoc! {"
-            ./docs/bad.md:1:1: MD018 No space after hash on atx style header
-            ./docs/bad.md:1:1: MD041 First line in file should be a top level header
-            ./docs/bad.md:1:1: MD047 File should end with a single newline character
-            ./top.md:1:1: MD018 No space after hash on atx style header
-            ./top.md:1:1: MD041 First line in file should be a top level header
-            ./top.md:1:1: MD047 File should end with a single newline character
+            docs/../docs/bad.md:1:1: MD018 No space after hash on atx style header
+            docs/../docs/bad.md:1:1: MD041 First line in file should be a top level header
+            docs/../docs/bad.md:1:1: MD047 File should end with a single newline character
+            docs/../top.md:1:1: MD018 No space after hash on atx style header
+            docs/../top.md:1:1: MD041 First line in file should be a top level header
+            docs/../top.md:1:1: MD047 File should end with a single newline character
 
             Found 6 errors.
         "});
@@ -575,39 +576,15 @@ fn check_does_not_read_the_boundary_gitignore_for_a_link_named_on_its_own() -> R
 
 #[cfg(unix)]
 #[test]
-fn check_keeps_a_step_back_that_follows_a_link() -> Result<()> {
-    with_tree(
-        &[
-            ("proj/real/docs/keep.md", "# Fine\n"),
-            ("proj/other/bad.md", "#Hello."),
-        ],
-        |root| {
-            let proj = root.join("proj");
-            symlink("real/docs", proj.join("link")).into_diagnostic()?;
-
-            // `link/..` is where the link led, not `proj`, so the step cannot
-            // be taken out and the name keeps it.
-            let assert = check_in(&proj, &["link/../../other"]).assert();
-            assert.failure().stdout(indoc! {"
-                link/../../other/bad.md:1:1: MD018 No space after hash on atx style header
-                link/../../other/bad.md:1:1: MD041 First line in file should be a top level header
-                link/../../other/bad.md:1:1: MD047 File should end with a single newline character
-
-                Found 3 errors.
-            "});
-            Ok(())
-        },
-    )
-}
-
-#[test]
-fn check_names_a_file_without_the_dots_that_said_nothing() -> Result<()> {
+fn check_names_a_file_the_way_the_command_named_the_path() -> Result<()> {
     with_tree(&[("docs/bad.md", "#Hello.")], |root| {
+        // What is reported is built by joining onto the name mado was given,
+        // and mado does not rewrite that name.
         let assert = check_in(root, &["docs/./."]).assert();
         assert.failure().stdout(indoc! {"
-            docs/bad.md:1:1: MD018 No space after hash on atx style header
-            docs/bad.md:1:1: MD041 First line in file should be a top level header
-            docs/bad.md:1:1: MD047 File should end with a single newline character
+            docs/././bad.md:1:1: MD018 No space after hash on atx style header
+            docs/././bad.md:1:1: MD041 First line in file should be a top level header
+            docs/././bad.md:1:1: MD047 File should end with a single newline character
 
             Found 3 errors.
         "});

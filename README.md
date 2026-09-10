@@ -173,6 +173,12 @@ Those are about the path itself. A repository *below* it stops the search as
 well where the path is in one, and does not where the path is not: there,
 `.gitignore` files from above it keep applying inside it.
 
+A path is only read against the files above it where its name leads where it
+reads. `mado check docs` and `mado check ./docs` do; `mado check docs/.`,
+`mado check d1/docs/../docs`, and a path reached through a symbolic link do
+not, and each of those is its own boundary — mado reports what an ignore file
+above them would have excluded, rather than excluding it silently.
+
 `.ignore` files stop at the same place, with one difference: inside a
 repository they are read from every parent directory, as [ripgrep] reads them.
 

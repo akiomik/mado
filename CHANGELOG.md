@@ -23,12 +23,6 @@ parsed and therefore what gets reported.
   no Git metadata: an `.ignore` file above the directory mado was started in is
   no longer read. Inside a repository they are still read from every parent
   directory (#436)
-- A path named with steps that lead nowhere — `mado check docs/.` or
-  `mado check d1/docs/../docs` — is reported under the name without them,
-  `docs/bad.md` rather than `docs/./bad.md`, and the ignore files above it now
-  reach it as they reach the name written plainly. A `..` that follows a
-  symbolic link stays where it is, since it undoes where the link led rather
-  than the name before it (#436)
 - **Breaking:** `service::walker::WalkParallelBuilder::build` returns one walker
   per set of paths that need the same ignore files read for them, rather than a
   single walker for every path given (#436)
