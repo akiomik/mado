@@ -518,19 +518,36 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file() -> Result<()> {
 
 #[test]
 fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
-    with_tree(BROKEN_PARENT_IGNORE, |root| {
-        // Here the walk does read them, so saying it again would say it twice.
-        let output = check_in(&root.join("proj"), &["docs"])
-            .output()
+    with_tree(
+        &[
+            ("proj/.ignore", "{a\n"),
+            // An ignore file of its own is what puts a directory in a walk of
+            // its own, and the two walks share the broken file above them.
+            ("proj/d1/.ignore", "x\n"),
+            ("proj/d1/docs/a.md", "# Fine\n"),
+            ("proj/d2/.ignore", "x\n"),
+            ("proj/d2/docs/a.md", "# Fine\n"),
+        ],
+        |root| {
+            let proj = root.join("proj");
+            write(
+                proj.join("mado.toml"),
+                "[lint]\nrespect-gitignore = false\n",
+            )
             .into_diagnostic()?;
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let complaints = stderr
-            .lines()
-            .filter(|line| line.contains("error parsing glob"))
-            .count();
-        assert_eq!(complaints, 1);
-        Ok(())
-    })
+
+            let output = check_in(&proj, &["d1/docs", "d2/docs"])
+                .output()
+                .into_diagnostic()?;
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let complaints = stderr
+                .lines()
+                .filter(|line| line.contains("error parsing glob"))
+                .count();
+            assert_eq!(complaints, 1);
+            Ok(())
+        },
+    )
 }
 
 #[test]

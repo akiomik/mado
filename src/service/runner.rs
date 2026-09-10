@@ -2,6 +2,7 @@ extern crate alloc;
 
 use alloc::sync::Arc;
 use comrak::Arena;
+use core::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, mpsc};
 use std::thread;
@@ -71,13 +72,27 @@ impl ParallelLintRunner {
             }
         });
 
-        let mut builder = MarkdownLintVisitorFactory::new(self.config, tx)?;
-        for walker in self.walkers {
-            walker.visit(&mut builder);
+        // Each walk holds its visitor for as long as it runs, so the groups
+        // run in batches of as many as the machine has to give, one visitor
+        // apiece, rather than one after another.
+        let concurrency = thread::available_parallelism().map_or(1, NonZero::get);
+        let mut remaining = self.walkers;
+        let mut builders = (0..concurrency.min(remaining.len()))
+            .map(|_| MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        while !remaining.is_empty() {
+            let rest = remaining.split_off(remaining.len().min(concurrency));
+            thread::scope(|scope| {
+                for (walker, builder) in remaining.into_iter().zip(builders.iter_mut()) {
+                    scope.spawn(move || walker.visit(builder));
+                }
+            });
+            remaining = rest;
         }
 
         // Wait for the completion
-        drop(builder);
+        drop(builders);
+        drop(tx);
         thread
             .join()
             .map_err(|err| miette!("Failed to join thread. {:?}", err))?;

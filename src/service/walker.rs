@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use ignore::WalkBuilder;
 use ignore::WalkParallel;
+use ignore::types::Types;
 use ignore::types::TypesBuilder;
 use miette::IntoDiagnostic as _;
 use miette::Result;
@@ -187,10 +188,14 @@ impl WalkParallelBuilder {
 
     /// One walker for `patterns`, which need the same ignore files handed
     /// back. `files` is those, in the order to hand them over, or `None` for a
-    /// repository, where the walker finds them itself.
+    /// repository, where the walker finds them itself. `threads` is what the
+    /// walk may spend on itself, `0` meaning as many as it likes.
     fn build_group(
         patterns: &[&PathBuf],
         files: Option<&[PathBuf]>,
+        types: &Types,
+        threads: usize,
+        reported: &mut Vec<PathBuf>,
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Result<WalkParallel> {
@@ -202,6 +207,7 @@ impl WalkParallelBuilder {
             builder.add(pattern);
         }
 
+        builder.threads(threads);
         builder.ignore(respect_ignore);
         builder.git_ignore(respect_gitignore);
 
@@ -230,23 +236,20 @@ impl WalkParallelBuilder {
                 // The walker reads these itself, and reports what it cannot
                 // parse, whenever it has a `.gitignore` to look for above a
                 // root. Without one it never looks up there, and this is the
-                // only reading they get.
+                // only reading they get. A file two groups both need is still
+                // one file with one thing wrong with it.
                 if let Some(err) = builder.add_ignore(file)
                     && !respect_gitignore
                     && !err.is_io()
+                    && !reported.contains(file)
                 {
+                    reported.push(file.clone());
                     eprintln!("{err}");
                 }
             }
         }
 
-        // NOTE: Expect performance improvements with pre-filtering
-        let types = TypesBuilder::new()
-            .add_defaults()
-            .select("markdown")
-            .build()
-            .into_diagnostic()?;
-        builder.types(types);
+        builder.types(types.clone());
 
         Ok(builder.build_parallel())
     }
@@ -263,6 +266,15 @@ impl WalkParallelBuilder {
         if patterns.is_empty() {
             return Err(miette!("files must be non-empty"));
         }
+
+        // NOTE: Expect performance improvements with pre-filtering. Built the
+        // once: every group selects the same thing, and reading the table of
+        // file types in again for each of them costs more than the walk does.
+        let types = TypesBuilder::new()
+            .add_defaults()
+            .select("markdown")
+            .build()
+            .into_diagnostic()?;
 
         let above_is_repository = current_dir
             .ancestors()
@@ -285,10 +297,23 @@ impl WalkParallelBuilder {
             }
         }
 
+        // A walk of its own for every group would spend more on starting
+        // threads than on walking. One each, and the runner runs the groups
+        // alongside each other, is cheaper wherever there is more than one.
+        let threads = usize::from(groups.len() > 1);
+        let mut reported = vec![];
         groups
             .iter()
             .map(|(files, members)| {
-                Self::build_group(members, files.as_deref(), respect_ignore, respect_gitignore)
+                Self::build_group(
+                    members,
+                    files.as_deref(),
+                    &types,
+                    threads,
+                    &mut reported,
+                    respect_ignore,
+                    respect_gitignore,
+                )
             })
             .collect()
     }
