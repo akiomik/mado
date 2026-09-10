@@ -684,14 +684,8 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file() -> Result<()> {
 fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
     with_tree(
         &[
-            ("proj/.ignore", "{a\n"),
-            // An ignore file of its own is what puts a directory in a walk of
-            // its own, and the two walks share the broken file above them.
-            ("proj/d1/.ignore", "x\n"),
+            ("proj/d1/.ignore", "{a\n"),
             ("proj/d1/docs/a.md", "# Fine\n"),
-            ("proj/d2/.ignore", "x\n"),
-            ("proj/d2/docs/a.md", "# Fine\n"),
-            ("proj/sub/keep.md", "# Fine\n"),
         ],
         |root| {
             let proj = root.join("proj");
@@ -701,9 +695,10 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
             )
             .into_diagnostic()?;
 
-            // The third names the same broken file as the first, by another
-            // route, and it is still one file with one thing wrong with it.
-            let output = check_in(&proj, &["d1/docs", "d2/docs", "sub/../d1/docs"])
+            // Two names for one directory are two walks, each handed the file
+            // above it under the name it walks by, and it is still one file
+            // with one thing wrong with it.
+            let output = check_in(&proj, &["./d1/docs", "d1/docs"])
                 .output()
                 .into_diagnostic()?;
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -712,6 +707,22 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
                 .filter(|line| line.contains("error parsing glob"))
                 .count();
             assert_eq!(complaints, 1);
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_reports_a_broken_glob_in_the_ignore_file_at_the_path_it_was_given() -> Result<()> {
+    with_tree(
+        &[(".gitignore", "{a\n"), ("docs/a.md", "# Fine\n")],
+        |root| {
+            // The walk reads what is over a root, not what is at one, so mado is
+            // the only reader of this file left to say what it could not parse.
+            let assert = check_in(root, &["."]).assert();
+            assert.success().stderr(indoc! {"
+            ./.gitignore: line 1: error parsing glob '{a': unclosed alternate group; missing '}' (maybe escape '{' with '[{]'?)
+        "});
             Ok(())
         },
     )

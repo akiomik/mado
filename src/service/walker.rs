@@ -3,6 +3,7 @@ use std::env;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::path::is_separator;
 use std::thread;
 
 use ignore::WalkBuilder;
@@ -178,8 +179,7 @@ impl WalkParallelBuilder {
         }
 
         // A name that does not lead where it reads bounds itself: nothing
-        // above it can be rooted at a name the walk's answers begin with. That
-        // covers `mado check .`, whose own files the walk reads for itself.
+        // above it can be rooted at a name the walk's answers begin with.
         if !Self::leads_where_it_reads(pattern) {
             return Self::bounds_itself(pattern);
         }
@@ -254,14 +254,18 @@ impl WalkParallelBuilder {
                 // `current_dir` was last set to, which is what lets each
                 // directory's patterns keep their own anchoring.
                 let dir = Self::named(file.parent().unwrap_or(file));
+                // The walker reads what is over a root itself, and reports the
+                // globs it cannot parse there, so long as it has a
+                // `.gitignore` to go looking for. It never reads over a root
+                // it has no reason to look above, and never reads a file that
+                // sits at a root rather than over it, and what it does not
+                // read it cannot report.
+                let told_by_the_walker =
+                    respect_gitignore && patterns.iter().any(|pattern| Self::named(pattern) != dir);
+
                 builder.current_dir(dir);
-                // The walker reads these itself, and reports what it cannot
-                // parse, whenever it has a `.gitignore` to look for above a
-                // root. Without one it never looks up there, and this is the
-                // only reading they get. A file two groups both need is still
-                // one file with one thing wrong with it.
                 if let Some(err) = builder.add_ignore(file)
-                    && !respect_gitignore
+                    && !told_by_the_walker
                     && !err.is_io()
                 {
                     // Two groups can name one file two ways, and it is still
@@ -281,33 +285,39 @@ impl WalkParallelBuilder {
     }
 
     /// Whether `pattern` leads where it reads. The walk answers by joining
-    /// onto the name it was given, so a `.` or a `..` written in the middle of
-    /// that name is in the middle of every answer, and no ignore file above it
-    /// can be rooted at a name those answers begin with. A link makes the
-    /// directory above a step something other than the name with that step
-    /// taken off, which the walk up would otherwise read off the name.
+    /// onto the name it was given, so a `.` written in the middle of that name
+    /// is in the middle of every answer, and no ignore file above it can be
+    /// rooted at a name those answers begin with. A `..` is the same, and a
+    /// link makes the directory above a step something other than the name
+    /// with that step taken off, which the walk up would otherwise read off
+    /// the name.
     ///
-    /// A trailing separator is not a step -- joining onto the name takes it --
-    /// and neither is a leading `./`, which the walker takes off a name and a
-    /// root alike before it compares them.
+    /// A trailing separator is not a step, and neither is a leading `./`,
+    /// which the walker takes off a name and a root alike before comparing
+    /// them.
     fn leads_where_it_reads(pattern: &Path) -> bool {
-        // Joined onto the way the walk will join onto it, so that a trailing
-        // separator counts for as little here as it does there.
-        const STEP: &str = "a";
-
-        let read: PathBuf = pattern.components().collect();
-        if pattern.join(STEP).as_os_str() != read.join(STEP).as_os_str() {
+        // `Path::components` drops a `.` that is not the first step, so the
+        // steps are counted off the name as it was written. Separators and a
+        // `.` are ASCII, which survives a name that is not text being read as
+        // text, and re-serialising the name would not: a `/` written on
+        // Windows comes back a `\`.
+        let says_nothing = pattern
+            .to_string_lossy()
+            .split(is_separator)
+            .enumerate()
+            .any(|(at, step)| step == "." && at > 0);
+        if says_nothing {
             return false;
         }
 
         let mut at = PathBuf::new();
-        for step in read.components() {
+        for step in pattern.components() {
             if step == Component::ParentDir {
                 return false;
             }
 
             at.push(step);
-            if at.symlink_metadata().is_ok_and(|at| at.is_symlink()) {
+            if at.symlink_metadata().is_ok_and(|found| found.is_symlink()) {
                 return false;
             }
         }
@@ -390,18 +400,24 @@ impl WalkParallelBuilder {
             .collect()
     }
 
-    /// The walkers a command's paths need, ready to be visited. See
-    /// `build_from` for what each of them expects of the visiting.
+    /// The walkers a command's paths need, ready to be visited.
+    ///
+    /// Each is given a share of the threads rather than the run of the
+    /// machine, on the understanding that several are visited alongside each
+    /// other. Visiting them one at a time is correct and slower; visiting all
+    /// of them at once asks the machine for more than it has.
     #[inline]
     pub fn build(
         patterns: &[PathBuf],
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Result<Vec<WalkParallel>> {
-        // A directory mado cannot name is one no pattern can be found under.
-        let current_dir = env::current_dir()
-            .and_then(|dir| dir.canonicalize())
-            .unwrap_or_default();
+        // The names paths are written under are compared with this, so it is
+        // the one the operating system gives rather than one resolved into a
+        // shape nobody writes: `fs::canonicalize` answers on Windows with a
+        // `\\?\C:\...` that no name reaches by walking up. A directory mado
+        // cannot name at all is one no pattern can be found under.
+        let current_dir = env::current_dir().unwrap_or_default();
 
         Self::build_from(patterns, &current_dir, respect_ignore, respect_gitignore)
     }
