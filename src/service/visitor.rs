@@ -97,6 +97,7 @@ impl ParallelVisitor for MarkdownLintVisitor {
     }
 }
 
+#[derive(Clone)]
 pub struct MarkdownLintVisitorFactory {
     config: Config,
     exclusion: GlobSet,
@@ -105,6 +106,8 @@ pub struct MarkdownLintVisitorFactory {
 }
 
 impl MarkdownLintVisitorFactory {
+    /// A factory whose visitors keep their own note of what has been said. A
+    /// clone of it keeps that note rather than starting one.
     #[inline]
     pub fn new(config: Config, tx: SyncSender<Vec<Violation>>) -> miette::Result<Self> {
         let exclusion = config.lint.exclude_set()?;
@@ -114,19 +117,6 @@ impl MarkdownLintVisitorFactory {
             tx,
             said: Arc::new(Mutex::new(HashSet::new())),
         })
-    }
-
-    /// Another factory like this one, whose visitors say what this one's have
-    /// said no more than once between them.
-    #[inline]
-    #[must_use]
-    pub fn sharing(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            exclusion: self.exclusion.clone(),
-            tx: self.tx.clone(),
-            said: Arc::clone(&self.said),
-        }
     }
 }
 
@@ -179,10 +169,10 @@ mod tests {
     }
 
     #[test]
-    fn markdown_lint_visitor_factory_sharing() -> miette::Result<()> {
+    fn markdown_lint_visitor_factory_clone_keeps_the_note() -> miette::Result<()> {
         let (tx, _rx) = mpsc::sync_channel::<Vec<Violation>>(0);
         let first = MarkdownLintVisitorFactory::new(Config::default(), tx)?;
-        let second = first.sharing();
+        let second = first.clone();
 
         assert!(Arc::ptr_eq(&first.said, &second.said));
         Ok(())

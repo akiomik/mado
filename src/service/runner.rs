@@ -79,17 +79,12 @@ impl ParallelLintRunner {
         // walk the batch has no visitor for would go unwalked without a word.
         let at_once = walks_at_once(thread_budget(), self.walkers.len()).max(1);
         let mut remaining = self.walkers;
-        // The visitors share one note of what has been said, so a broken
-        // ignore file several groups read is reported once for the run.
-        let wanted = at_once.min(remaining.len());
-        let mut builders: Vec<MarkdownLintVisitorFactory> = Vec::with_capacity(wanted);
-        for _ in 0..wanted {
-            let next = match builders.first() {
-                Some(first) => first.sharing(),
-                None => MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone())?,
-            };
-            builders.push(next);
-        }
+        // A clone of the factory keeps the note of what has been said, so a
+        // broken ignore file several groups read is reported once for the run.
+        let first = MarkdownLintVisitorFactory::new(self.config, tx.clone())?;
+        let alongside = at_once.min(remaining.len()).saturating_sub(1);
+        let mut builders = vec![first.clone(); alongside];
+        builders.push(first);
         while !remaining.is_empty() {
             let rest = remaining.split_off(remaining.len().min(at_once));
             thread::scope(|scope| {
@@ -149,6 +144,23 @@ mod tests {
     fn parallel_lint_runner_new_empty_patterns() {
         let result = ParallelLintRunner::new(&[], Config::default(), 0);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parallel_lint_runner_run_several_groups() -> Result<()> {
+        let mut config = Config::default();
+        config.lint.rules = vec![];
+
+        // Nothing is read for a file and something is for a directory, so the
+        // two are walked as two groups.
+        let patterns = [
+            Path::new("README.md").to_path_buf(),
+            Path::new("src").to_path_buf(),
+        ];
+        let runner = ParallelLintRunner::new(&patterns, config, 0)?;
+        let actual = runner.run()?;
+        assert_eq!(actual, vec![]);
+        Ok(())
     }
 
     #[test]
