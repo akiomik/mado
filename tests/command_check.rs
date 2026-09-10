@@ -490,6 +490,49 @@ fn check_respect_ignore_does_not_depend_on_respect_gitignore() -> Result<()> {
     )
 }
 
+/// A parent `.ignore` whose only pattern the glob parser rejects, alongside a
+/// clean file to lint, and `respect-gitignore` turned off.
+const BROKEN_PARENT_IGNORE: &[(&str, &str)] =
+    &[("proj/.ignore", "{a\n"), ("proj/docs/a.md", "# Fine\n")];
+
+#[test]
+fn check_reports_a_broken_glob_in_a_parent_ignore_file() -> Result<()> {
+    with_tree(BROKEN_PARENT_IGNORE, |root| {
+        let proj = root.join("proj");
+        write(
+            proj.join("mado.toml"),
+            "[lint]\nrespect-gitignore = false\n",
+        )
+        .into_diagnostic()?;
+
+        // With no `.gitignore` to look for, the walk never reads the
+        // directories above the one it was given, so mado is the only reader
+        // left to say what it could not parse.
+        let assert = check_in(&proj, &["docs"]).assert();
+        assert.success().stderr(indoc! {"
+            ./.ignore: line 1: error parsing glob '{a': unclosed alternate group; missing '}' (maybe escape '{' with '[{]'?)
+        "});
+        Ok(())
+    })
+}
+
+#[test]
+fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
+    with_tree(BROKEN_PARENT_IGNORE, |root| {
+        // Here the walk does read them, so saying it again would say it twice.
+        let output = check_in(&root.join("proj"), &["docs"])
+            .output()
+            .into_diagnostic()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let complaints = stderr
+            .lines()
+            .filter(|line| line.contains("error parsing glob"))
+            .count();
+        assert_eq!(complaints, 1);
+        Ok(())
+    })
+}
+
 #[test]
 fn check_does_not_read_the_current_directory_gitignore_for_a_path_above_it() -> Result<()> {
     with_tree(

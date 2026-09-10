@@ -213,10 +213,11 @@ impl WalkParallelBuilder {
         builder.git_exclude(false);
 
         if let Some(files) = files {
-            // Outside a repository the walker drops `.gitignore` entirely, and
-            // `require_git(false)` on its own would read ignore files every
-            // directory up to the filesystem root. Stop its parent search and
-            // put back the files between here and the boundary.
+            // Outside a repository the walker drops `.gitignore` entirely.
+            // `require_git(false)` puts it back, and `parents(false)` leaves
+            // what the walker finds above a root out of the matching -- it
+            // still reads it -- so the files between the boundary and the root
+            // are handed back below.
             builder.require_git(false);
             builder.parents(false);
 
@@ -226,10 +227,16 @@ impl WalkParallelBuilder {
                 // directory's patterns keep their own anchoring.
                 let dir = Self::named(file.parent().unwrap_or(file));
                 builder.current_dir(dir);
-                // The walker reads every one of these on its own to answer
-                // about the paths above the boundary, and reports what it
-                // cannot parse, so the copy handed back here says nothing.
-                drop(builder.add_ignore(file));
+                // The walker reads these itself, and reports what it cannot
+                // parse, whenever it has a `.gitignore` to look for above a
+                // root. Without one it never looks up there, and this is the
+                // only reading they get.
+                if let Some(err) = builder.add_ignore(file)
+                    && !respect_gitignore
+                    && !err.is_io()
+                {
+                    eprintln!("{err}");
+                }
             }
         }
 
