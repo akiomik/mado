@@ -177,9 +177,10 @@ A path is only read against the files above it where its name leads where it
 reads. `mado check docs`, `mado check ./docs` and `mado check docs/` do — a
 separator on either end is not a step. `mado check docs/.`,
 `mado check docs//sub`, `mado check d1/docs/../docs`, and a path reached
-through a symbolic link do not, and each of those is its own boundary: mado
-reports what an ignore file above them would have excluded, rather than
-excluding it silently.
+through a symbolic link do not, and outside a repository each of those is its
+own boundary: mado reports what an ignore file above them would have excluded,
+rather than excluding it silently. Inside one none of this arises — the walker
+finds these files itself there, and reads every spelling against them alike.
 
 `.ignore` files stop at the same place, with one difference: inside a
 repository they are read from every parent directory, as [ripgrep] reads them.

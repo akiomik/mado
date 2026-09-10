@@ -637,6 +637,19 @@ fn check_bounds_a_name_that_does_not_lead_where_it_reads() -> Result<()> {
 }
 
 #[test]
+fn check_does_not_bound_a_name_that_does_not_lead_where_it_reads_in_a_repository() -> Result<()> {
+    with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
+        create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+
+        // Nothing is handed back in a repository, so nothing rests on how the
+        // name is spelled: the walk finds the files above `docs` itself.
+        let assert = check_in(&root.join("proj"), &["docs/."]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
 fn check_walks_the_directory_a_name_that_undoes_itself_lands_in() -> Result<()> {
     with_tree(
         &[("docs/bad.md", "#Hello."), ("top.md", "#Hello.")],
