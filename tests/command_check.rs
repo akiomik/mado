@@ -484,6 +484,17 @@ fn check_reads_an_anchored_parent_pattern_for_a_name_that_leads_where_it_reads()
 }
 
 #[test]
+fn check_reads_an_anchored_parent_pattern_for_a_name_that_ends_in_a_separator() -> Result<()> {
+    with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
+        // A separator on the end is not a step: joining onto the name takes
+        // it, which is what the walk does to answer.
+        let assert = check_in(&root.join("proj"), &["docs/"]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
 fn check_bounds_a_name_that_does_not_lead_where_it_reads() -> Result<()> {
     with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
         // `docs/.` has the walk answering about `docs/./ignored.md`, which no

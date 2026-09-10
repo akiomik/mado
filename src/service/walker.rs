@@ -1,5 +1,6 @@
 use core::num::NonZero;
 use std::env;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::thread;
@@ -179,7 +180,7 @@ impl WalkParallelBuilder {
         // A name that does not lead where it reads bounds itself: nothing
         // above it can be rooted at a name the walk's answers begin with. That
         // covers `mado check .`, whose own files the walk reads for itself.
-        if !Self::leads_where_it_reads(pattern, current_dir) {
+        if !Self::leads_where_it_reads(pattern) {
             return Self::bounds_itself(pattern);
         }
 
@@ -279,18 +280,39 @@ impl WalkParallelBuilder {
         Ok(builder.build_parallel())
     }
 
-    /// Whether `pattern` leads where it reads: the walk answers with names
-    /// built by joining onto it, and `Gitignore` strips the root it was given
-    /// as a string, so an ignore file above a name can only be rooted at one
-    /// the walk's answers begin with. A `.`, a `..` or a link anywhere in a
-    /// name breaks that; a leading `./` does not, since the walker takes one
-    /// off a name it is matching before it looks at the root.
-    fn leads_where_it_reads(pattern: &Path, current_dir: &Path) -> bool {
-        let plain = pattern.strip_prefix(".").unwrap_or(pattern);
+    /// Whether `pattern` leads where it reads. The walk answers by joining
+    /// onto the name it was given, so a `.` or a `..` written in the middle of
+    /// that name is in the middle of every answer, and no ignore file above it
+    /// can be rooted at a name those answers begin with. A link makes the
+    /// directory above a step something other than the name with that step
+    /// taken off, which the walk up would otherwise read off the name.
+    ///
+    /// A trailing separator is not a step -- joining onto the name takes it --
+    /// and neither is a leading `./`, which the walker takes off a name and a
+    /// root alike before it compares them.
+    fn leads_where_it_reads(pattern: &Path) -> bool {
+        // Joined onto the way the walk will join onto it, so that a trailing
+        // separator counts for as little here as it does there.
+        const STEP: &str = "a";
 
-        pattern
-            .canonicalize()
-            .is_ok_and(|at| at.as_os_str() == current_dir.join(plain).as_os_str())
+        let read: PathBuf = pattern.components().collect();
+        if pattern.join(STEP).as_os_str() != read.join(STEP).as_os_str() {
+            return false;
+        }
+
+        let mut at = PathBuf::new();
+        for step in read.components() {
+            if step == Component::ParentDir {
+                return false;
+            }
+
+            at.push(step);
+            if at.symlink_metadata().is_ok_and(|at| at.is_symlink()) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// One walker per set of patterns that need the same ignore files handed
