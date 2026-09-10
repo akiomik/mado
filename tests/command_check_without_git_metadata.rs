@@ -1,13 +1,15 @@
-//! A tree that has lost its Git metadata, and a clone of the same tree, are
-//! linted by walks that reach their ignore files by different routes: the
-//! walker finds them for a clone, and mado hands them back for an archive.
-//! What the two must never do is disagree in the direction that hides
-//! something -- an archive dropping a file its clone reports.
+//! `mado check` over a tree that has lost its Git metadata -- a source
+//! archive, a Docker context copied without `.git` -- against `mado check`
+//! over a clone of the same tree. The two reach their ignore files by
+//! different routes: the walker finds them for a clone, and mado hands them
+//! back where there is no repository to find them by. What they must never do
+//! is disagree in the direction that hides something: a tree without the
+//! metadata dropping a file its clone reports.
 //!
-//! The trees here are generated rather than written out, because the shapes
-//! that have broken this are the ones nobody thought to write: an ignore file
-//! two levels up taking back what one below it excludes, a pattern anchored to
-//! a directory the walk names another way.
+//! The trees here are laid out by pairing rather than written out one by one,
+//! because the shapes that have broken this are the ones nobody thought to
+//! write: an ignore file two levels up taking back what one below it excludes,
+//! a pattern anchored to a directory the walk names another way.
 
 extern crate alloc;
 
