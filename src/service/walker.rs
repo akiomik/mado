@@ -340,6 +340,11 @@ impl WalkParallelBuilder {
                 respect_gitignore,
                 &mut seen,
             );
+            // Two names for one directory are two keys, and have to be: the
+            // walker roots a file it is handed at the name it was handed, and
+            // matches it against paths built from the name a pattern was
+            // written as. A group named `sub/../d1` cannot be handed the file
+            // `./d1` walks by, so the two walk separately.
             match groups.iter_mut().find(|(at, _)| *at == files) {
                 Some((_, members)) => members.push(pattern),
                 None => groups.push((files, vec![pattern])),

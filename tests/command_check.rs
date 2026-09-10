@@ -440,6 +440,27 @@ fn check_keeps_ignore_ahead_of_gitignore_with_git_metadata() -> Result<()> {
 }
 
 #[test]
+fn check_keeps_each_spelling_of_a_directory_anchored_to_itself() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "/d1/docs/ignored.md\n"),
+            ("proj/d1/docs/ignored.md", "#Hello."),
+            ("proj/d1/docs/keep.md", "# Fine\n"),
+            ("proj/sub/keep.md", "# Fine\n"),
+        ],
+        |root| {
+            // A walk yields paths built from the name its pattern was written
+            // as, so the boundary's `.gitignore` has to be rooted at that name
+            // for an anchored pattern in it to line up. Two names for one
+            // directory need one walk each.
+            let assert = check_in(&root.join("proj"), &["./d1/docs", "sub/../d1/docs"]).assert();
+            assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn check_reads_each_root_gitignore_when_only_one_is_in_a_repository() -> Result<()> {
     with_tree(
         &[

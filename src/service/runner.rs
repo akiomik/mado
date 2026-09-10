@@ -80,7 +80,10 @@ impl ParallelLintRunner {
             .map(|_| MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone()))
             .collect::<Result<Vec<_>>>()?;
         while !remaining.is_empty() {
-            let rest = remaining.split_off(remaining.len().min(concurrency));
+            // One a batch at the very least, whatever the count came out as:
+            // a batch of none would leave the loop turning without moving.
+            let batch = remaining.len().min(concurrency).max(1);
+            let rest = remaining.split_off(batch);
             thread::scope(|scope| {
                 for (walker, builder) in remaining.into_iter().zip(builders.iter_mut()) {
                     scope.spawn(move || walker.visit(builder));
