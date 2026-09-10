@@ -39,6 +39,11 @@ pub(crate) fn walks_at_once(budget: usize, walks: usize) -> usize {
 /// What one walk may spend on itself where a command makes `walks` of them, and
 /// `0` -- as many as it likes -- where it makes only one. Between them the ones
 /// running alongside each other spend no more than `budget`.
+///
+/// A count is all there is to go on here, and it cannot say which walk holds
+/// the tree, so this hands the budget to one walk at a time while there are no
+/// more walks than threads. That is what a big walk among small ones needs and
+/// what a crowd of small ones does not -- see #444.
 pub(crate) fn threads_per_walk(budget: usize, walks: usize) -> usize {
     if walks < 2 {
         return 0;
@@ -309,6 +314,14 @@ impl WalkParallelBuilder {
         Ok(builder.build_parallel())
     }
 
+    /// `pattern` with the `.` components that say nothing left out, keeping a
+    /// leading one. A walk names what it finds by joining onto the name it was
+    /// given, so `docs/.` has it answering about `docs/./a.md`, and no ignore
+    /// file above it can be rooted at a name that lines that up.
+    fn without_idle_dots(pattern: &Path) -> PathBuf {
+        pattern.components().collect()
+    }
+
     /// One walker per set of patterns that need the same ignore files handed
     /// back. Which files those are is a property of a single pattern, but
     /// patterns that need the same ones can be walked together.
@@ -335,9 +348,13 @@ impl WalkParallelBuilder {
             .ancestors()
             .skip(1)
             .any(Self::is_repository_root);
+        let patterns: Vec<PathBuf> = patterns
+            .iter()
+            .map(|p| Self::without_idle_dots(p))
+            .collect();
         let mut seen = vec![];
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];
-        for pattern in patterns {
+        for pattern in &patterns {
             let files = Self::ignore_files_for(
                 pattern,
                 current_dir,

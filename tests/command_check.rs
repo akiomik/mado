@@ -461,6 +461,40 @@ fn check_keeps_each_spelling_of_a_directory_anchored_to_itself() -> Result<()> {
 }
 
 #[test]
+fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_dot() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "/docs/ignored.md\n"),
+            ("proj/docs/ignored.md", "#Hello."),
+            ("proj/docs/keep.md", "# Fine\n"),
+        ],
+        |root| {
+            // A walk names what it finds by joining onto the name it was
+            // given, so a `.` left in the middle of that is a name no ignore
+            // file above it can be rooted at.
+            let assert = check_in(&root.join("proj"), &["docs/."]).assert();
+            assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_names_a_file_without_the_dots_that_said_nothing() -> Result<()> {
+    with_tree(&[("docs/bad.md", "#Hello.")], |root| {
+        let assert = check_in(root, &["docs/./."]).assert();
+        assert.failure().stdout(indoc! {"
+            docs/bad.md:1:1: MD018 No space after hash on atx style header
+            docs/bad.md:1:1: MD041 First line in file should be a top level header
+            docs/bad.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
+}
+
+#[test]
 fn check_reads_each_root_gitignore_when_only_one_is_in_a_repository() -> Result<()> {
     with_tree(
         &[
