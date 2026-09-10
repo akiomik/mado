@@ -89,17 +89,6 @@ impl WalkParallelBuilder {
         path.parent().map_or_else(|| Self::named(path), Self::named)
     }
 
-    /// Whether `dir` can only name something below the directory it is read
-    /// from, which a relative name that neither starts at the filesystem root
-    /// nor climbs with `..` always does. Answering this without asking the
-    /// filesystem is what keeps a command spread over many directories cheap.
-    fn stays_below(dir: &Path) -> bool {
-        dir.is_relative()
-            && dir
-                .components()
-                .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
-    }
-
     /// The answer for a `dir` with no boundary over it: it bounds itself, and
     /// nothing above it is read, unless it turns out to be in a repository
     /// after all.
@@ -314,12 +303,58 @@ impl WalkParallelBuilder {
         Ok(builder.build_parallel())
     }
 
-    /// `pattern` with the `.` components that say nothing left out, keeping a
-    /// leading one. A walk names what it finds by joining onto the name it was
-    /// given, so `docs/.` has it answering about `docs/./a.md`, and no ignore
-    /// file above it can be rooted at a name that lines that up.
-    fn without_idle_dots(pattern: &Path) -> PathBuf {
-        pattern.components().collect()
+    /// Whether `dir` can only name something below the directory it is read
+    /// from. A relative name that neither starts at the filesystem root nor
+    /// climbs with `..` does, so long as no step of it is a link, which could
+    /// lead anywhere. Answering it this way costs a look at each step rather
+    /// than a resolution of the whole name.
+    fn stays_below(dir: &Path) -> bool {
+        if dir.is_absolute() {
+            return false;
+        }
+
+        let mut at = PathBuf::new();
+        for component in dir.components() {
+            match component {
+                Component::CurDir => continue,
+                Component::Normal(step) => at.push(step),
+                _ => return false,
+            }
+
+            if at.symlink_metadata().is_ok_and(|step| step.is_symlink()) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// `pattern` with the steps that lead nowhere left out: the `.`s, and the
+    /// `..`s that undo a directory that is one rather than a link to one. A
+    /// walk names what it finds by joining onto the name it was given, so
+    /// `d1/docs/../docs` has it answering about `d1/docs/../docs/a.md`, and no
+    /// ignore file above it can be rooted at a name that lines that up.
+    fn without_idle_steps(pattern: &Path) -> PathBuf {
+        let mut kept: Vec<Component<'_>> = vec![];
+        for component in pattern.components() {
+            // A `..` after a link undoes where the link led, not the name
+            // before it, so only a directory of its own can be dropped here.
+            let undoes_a_directory = component == Component::ParentDir
+                && matches!(kept.last(), Some(Component::Normal(_)))
+                && kept
+                    .iter()
+                    .collect::<PathBuf>()
+                    .symlink_metadata()
+                    .is_ok_and(|at| at.is_dir());
+
+            if undoes_a_directory {
+                kept.pop();
+            } else {
+                kept.push(component);
+            }
+        }
+
+        kept.iter().collect()
     }
 
     /// One walker per set of patterns that need the same ignore files handed
@@ -350,7 +385,7 @@ impl WalkParallelBuilder {
             .any(Self::is_repository_root);
         let patterns: Vec<PathBuf> = patterns
             .iter()
-            .map(|p| Self::without_idle_dots(p))
+            .map(|p| Self::without_idle_steps(p))
             .collect();
         let mut seen = vec![];
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];

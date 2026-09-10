@@ -2,6 +2,8 @@ use std::fs::File;
 use std::fs::create_dir_all;
 use std::fs::write;
 use std::io::Write as _;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -474,6 +476,77 @@ fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_dot() -> Res
             // file above it can be rooted at.
             let assert = check_in(&root.join("proj"), &["docs/."]).assert();
             assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_step_back() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "/d1/docs/ignored.md\n"),
+            ("proj/d1/docs/ignored.md", "#Hello."),
+            ("proj/d1/docs/keep.md", "# Fine\n"),
+        ],
+        |root| {
+            // Climbing by adding a `..` names a directory the walk's own
+            // answers do not begin with, so the file above has to be rooted at
+            // the name with the step taken out.
+            let assert = check_in(&root.join("proj"), &["d1/docs/../docs"]).assert();
+            assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn check_does_not_read_the_boundary_gitignore_for_a_tree_a_link_leads_out_to() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "ignored.md\n"),
+            ("outside/docs/ignored.md", "#Hello."),
+        ],
+        |root| {
+            symlink(root.join("outside"), root.join("proj/link")).into_diagnostic()?;
+
+            // `link/docs` reads as a name under `proj` and is not one.
+            let assert = check_in(&root.join("proj"), &["link/docs"]).assert();
+            assert.failure().stdout(indoc! {"
+                link/docs/ignored.md:1:1: MD018 No space after hash on atx style header
+                link/docs/ignored.md:1:1: MD041 First line in file should be a top level header
+                link/docs/ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn check_keeps_a_step_back_that_follows_a_link() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/real/docs/keep.md", "# Fine\n"),
+            ("proj/other/bad.md", "#Hello."),
+        ],
+        |root| {
+            let proj = root.join("proj");
+            symlink("real/docs", proj.join("link")).into_diagnostic()?;
+
+            // `link/..` is where the link led, not `proj`, so the step cannot
+            // be taken out and the name keeps it.
+            let assert = check_in(&proj, &["link/../../other"]).assert();
+            assert.failure().stdout(indoc! {"
+                link/../../other/bad.md:1:1: MD018 No space after hash on atx style header
+                link/../../other/bad.md:1:1: MD041 First line in file should be a top level header
+                link/../../other/bad.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
             Ok(())
         },
     )
