@@ -193,10 +193,13 @@ be mado excluding a file a clone keeps, so `.gitignore` files are left to
 Git's own rule there and go unread outside a repository, as they did before
 mado read them without one. Any parent directory counts, however far above the
 tree it sits and whether or not the line names anything below it, since the
-walker reads `.ignore` files from all of them. mado says once which `.ignore`
-file it was, since a tree where this happens is a tree whose `.gitignore` files
-go unread. Turning `respect-ignore` off leaves nothing to rank over a
-`.gitignore`, and it applies as usual.
+walker reads `.ignore` files from all of them. Git's own rule is the walker's
+whole arrangement, so `.ignore` files are read from every parent directory
+there as well, rather than stopping where they otherwise would. mado says once
+which `.ignore` file it was, since a tree where this happens is a tree whose
+`.gitignore` files go unread. Turning `respect-ignore` off leaves nothing to
+rank over a `.gitignore`, and it applies as usual. Inside a repository none of
+this arises: the walker finds every one of these files itself.
 
 The global Git ignore file and `.git/info/exclude` are never read: neither
 travels with the tree being linted, so honouring them would make the result

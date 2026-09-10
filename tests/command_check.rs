@@ -452,8 +452,11 @@ fn check_keeps_what_an_ignore_file_above_the_path_takes_back() -> Result<()> {
 fn check_keeps_what_an_ignore_file_above_the_path_takes_back_in_a_repository() -> Result<()> {
     with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
         create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+
+        // The walker finds these files itself here, so there is nothing for
+        // mado to arrange and nothing to say about having left it alone.
         let assert = check_in(&root.join("proj"), &["docs"]).assert();
-        assert.failure().stdout(indoc! {"
+        assert.failure().stderr("").stdout(indoc! {"
             docs/ignored.md:1:1: MD018 No space after hash on atx style header
             docs/ignored.md:1:1: MD041 First line in file should be a top level header
             docs/ignored.md:1:1: MD047 File should end with a single newline character
