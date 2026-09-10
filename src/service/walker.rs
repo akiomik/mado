@@ -1,7 +1,9 @@
+use core::num::NonZero;
 use std::env;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::thread;
 
 use ignore::WalkBuilder;
 use ignore::WalkParallel;
@@ -58,6 +60,17 @@ impl WalkParallelBuilder {
                 .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
     }
 
+    /// The answer for a `dir` with no boundary over it: it bounds itself, and
+    /// nothing above it is read, unless it turns out to be in a repository
+    /// after all.
+    fn bounds_itself(dir: &Path) -> Option<Vec<PathBuf>> {
+        let in_repository = dir
+            .canonicalize()
+            .is_ok_and(|path| path.ancestors().any(Self::is_repository_root));
+
+        (!in_repository).then(Vec::new)
+    }
+
     /// The ignore files a pattern sitting in `dir` needs handed back, or
     /// `None` in a repository, where the walker finds them on its own. They
     /// come from the directories between `current_dir` and `dir`, and are
@@ -71,6 +84,12 @@ impl WalkParallelBuilder {
         respect_ignore: bool,
         respect_gitignore: bool,
     ) -> Option<Vec<PathBuf>> {
+        // A directory mado cannot name is one nothing can be found under, so
+        // no path has a boundary over it to walk up to and read from.
+        if current_dir.as_os_str().is_empty() {
+            return Self::bounds_itself(dir);
+        }
+
         let mut dirs = vec![];
         let mut at = dir.to_path_buf();
         loop {
@@ -88,11 +107,7 @@ impl WalkParallelBuilder {
                     Ok(canonical) if canonical.starts_with(current_dir) => false,
                     // Past the boundary, which a name written with `..` can be
                     // however far the walk up has left to go, or gone.
-                    canonical => {
-                        let in_repository = canonical
-                            .is_ok_and(|path| path.ancestors().any(Self::is_repository_root));
-                        return (!in_repository).then(Vec::new);
-                    }
+                    _ => return Self::bounds_itself(&at),
                 }
             };
 
@@ -111,7 +126,7 @@ impl WalkParallelBuilder {
 
             match Self::parent_of(&at) {
                 Some(parent) if parent != at => at = parent,
-                _ => return Some(vec![]),
+                _ => return Self::bounds_itself(&at),
             }
         }
     }
@@ -297,10 +312,19 @@ impl WalkParallelBuilder {
             }
         }
 
-        // A walk of its own for every group would spend more on starting
-        // threads than on walking. One each, and the runner runs the groups
-        // alongside each other, is cheaper wherever there is more than one.
-        let threads = usize::from(groups.len() > 1);
+        // The runner runs a machine's worth of groups alongside each other, so
+        // the machine is shared out between them rather than handed whole to
+        // each in turn: a walk of its own for every group would spend more on
+        // starting threads than on walking.
+        let threads = if groups.len() > 1 {
+            thread::available_parallelism()
+                .map_or(1, NonZero::get)
+                .div_ceil(groups.len())
+        } else {
+            // As many as the walk likes, which is what it did before there
+            // was ever more than one of them.
+            0
+        };
         let mut reported = vec![];
         groups
             .iter()
