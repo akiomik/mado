@@ -162,12 +162,12 @@ impl WalkParallelBuilder {
     /// The whole way up is asked, not the part mado hands back: the walker
     /// reads an `.ignore` however far over the tree it sits, so one that far
     /// over ranks over a `.gitignore` in it just the same.
-    fn taken_back_over(pattern: &Path) -> bool {
-        pattern.canonicalize().is_ok_and(|at| {
+    fn taken_back_over(pattern: &Path) -> Option<PathBuf> {
+        pattern.canonicalize().ok().and_then(|at| {
             at.ancestors()
                 .skip(1)
                 .map(|over| over.join(".ignore"))
-                .any(|file| file.is_file() && Self::takes_something_back(&file))
+                .find(|file| file.is_file() && Self::takes_something_back(file))
         })
     }
 
@@ -210,13 +210,6 @@ impl WalkParallelBuilder {
             return Some(vec![]);
         }
 
-        // Whatever mado does with the files over this one, they end up under
-        // what the walk finds for itself, and one of them taking something
-        // back is one the walk would then drop. With `.ignore` files left
-        // unread there is nothing over the walk's own answers to begin with.
-        if respect_ignore && respect_gitignore && Self::taken_back_over(pattern) {
-            return None;
-        }
         // A name that does not lead where it reads bounds itself: nothing
         // above it can be rooted at a name the walk's answers begin with.
         if !Self::leads_where_it_reads(pattern) {
@@ -398,16 +391,44 @@ impl WalkParallelBuilder {
             .skip(1)
             .any(Self::is_repository_root);
         let mut seen = vec![];
+        let mut explained = vec![];
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];
         for pattern in patterns {
-            let files = Self::ignore_files_for(
-                pattern,
-                current_dir,
-                above_is_repository,
-                respect_ignore,
-                respect_gitignore,
-                &mut seen,
-            );
+            // Whatever mado does with the files over this one, they end up
+            // under what the walk finds for itself, and one of them taking
+            // something back is one the walk would then drop. The walker's own
+            // arrangement is left to answer instead, which keeps what it
+            // should and reports more besides. With `.ignore` files left
+            // unread there is nothing over the walk's own answers to begin
+            // with.
+            let taken_back = (respect_ignore && respect_gitignore && pattern.is_dir())
+                .then(|| Self::taken_back_over(pattern))
+                .flatten();
+            if let Some(file) = taken_back
+                .as_ref()
+                .filter(|file| !explained.contains(*file))
+            {
+                explained.push(file.clone());
+                eprintln!(
+                    "{}: takes a path back with a `!` line, which ranks over any .gitignore \
+                     below it, and mado cannot arrange that without Git metadata, so \
+                     .gitignore files go unread here",
+                    file.display()
+                );
+            }
+
+            let files = if taken_back.is_some() {
+                None
+            } else {
+                Self::ignore_files_for(
+                    pattern,
+                    current_dir,
+                    above_is_repository,
+                    respect_ignore,
+                    respect_gitignore,
+                    &mut seen,
+                )
+            };
             // Two names for one directory are two keys, and have to be: the
             // walker roots a file it is handed at the name it was handed, and
             // matches it against paths built from the name a pattern was

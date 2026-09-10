@@ -521,6 +521,33 @@ fn check_reports_a_broken_glob_two_groups_read_once() -> Result<()> {
 }
 
 #[test]
+fn check_says_which_ignore_file_sent_gitignore_back_to_git() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        // Two names under the one `.ignore`, and a reader who cannot see why
+        // `.gitignore` stopped applying is told once which file it was.
+        let output = check_in(&root.join("proj"), &["docs", "docs"])
+            .output()
+            .into_diagnostic()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(stderr.lines().count(), 1);
+        assert!(stderr.contains(".ignore: takes a path back"));
+        Ok(())
+    })
+}
+
+#[test]
+fn check_says_nothing_where_no_ignore_file_is_read() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        let proj = root.join("proj");
+        write(proj.join("mado.toml"), "[lint]\nrespect-ignore = false\n").into_diagnostic()?;
+
+        let assert = check_in(&proj, &["docs"]).assert();
+        assert.success().stderr("");
+        Ok(())
+    })
+}
+
+#[test]
 fn check_keeps_ignore_ahead_of_gitignore_without_git_metadata() -> Result<()> {
     with_tree(CONFLICTING_KINDS, |root| {
         let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
