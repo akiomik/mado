@@ -1,5 +1,10 @@
+extern crate alloc;
+
+use alloc::sync::Arc;
 use core::result::Result;
+use std::collections::HashSet;
 use std::path::{Component, PathBuf};
+use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 
 use comrak::Arena;
@@ -14,6 +19,7 @@ pub struct MarkdownLintVisitor {
     linter: Linter,
     exclusion: GlobSet,
     tx: SyncSender<Vec<Violation>>,
+    said: Option<Arc<Mutex<HashSet<String>>>>,
 }
 
 impl MarkdownLintVisitor {
@@ -24,6 +30,30 @@ impl MarkdownLintVisitor {
             linter,
             exclusion,
             tx,
+            said: None,
+        }
+    }
+
+    /// This visitor, sharing `said` as the note of what has been said already.
+    /// A tree is walked a group at a time, and a broken ignore file several
+    /// groups read has as much to say to each of them.
+    #[inline]
+    #[must_use]
+    pub fn saying_each_thing_once(mut self, said: Arc<Mutex<HashSet<String>>>) -> Self {
+        self.said = Some(said);
+        self
+    }
+
+    /// Say `message`, unless it has been said already. A note that cannot be
+    /// read leaves it said again rather than unsaid.
+    fn say(&self, message: &str) {
+        let fresh = self.said.as_ref().is_none_or(|said| {
+            said.lock()
+                .is_ok_and(|mut said| said.insert(message.to_owned()))
+        });
+
+        if fresh {
+            eprintln!("{message}");
         }
     }
 
@@ -61,7 +91,7 @@ impl ParallelVisitor for MarkdownLintVisitor {
     fn visit(&mut self, either_entry: Result<DirEntry, Error>) -> WalkState {
         if let Err(err) = self.visit_inner(either_entry) {
             // TODO: Handle errors
-            eprintln!("{err}");
+            self.say(&err.to_string());
         }
         WalkState::Continue
     }
@@ -71,6 +101,7 @@ pub struct MarkdownLintVisitorFactory {
     config: Config,
     exclusion: GlobSet,
     tx: SyncSender<Vec<Violation>>,
+    said: Arc<Mutex<HashSet<String>>>,
 }
 
 impl MarkdownLintVisitorFactory {
@@ -81,7 +112,21 @@ impl MarkdownLintVisitorFactory {
             config,
             exclusion,
             tx,
+            said: Arc::new(Mutex::new(HashSet::new())),
         })
+    }
+
+    /// Another factory like this one, whose visitors say what this one's have
+    /// said no more than once between them.
+    #[inline]
+    #[must_use]
+    pub fn sharing(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            exclusion: self.exclusion.clone(),
+            tx: self.tx.clone(),
+            said: Arc::clone(&self.said),
+        }
     }
 }
 
@@ -89,11 +134,10 @@ impl<'s> ParallelVisitorBuilder<'s> for MarkdownLintVisitorFactory {
     #[inline]
     fn build(&mut self) -> Box<dyn ParallelVisitor + 's> {
         let linter = Linter::from(&self.config);
-        Box::new(MarkdownLintVisitor::new(
-            linter,
-            self.exclusion.clone(),
-            self.tx.clone(),
-        ))
+        Box::new(
+            MarkdownLintVisitor::new(linter, self.exclusion.clone(), self.tx.clone())
+                .saying_each_thing_once(Arc::clone(&self.said)),
+        )
     }
 }
 
@@ -118,6 +162,29 @@ mod tests {
 
         drop(visitor);
         assert!(rx.recv().is_err()); // Because rx has not received any messages
+        Ok(())
+    }
+
+    #[test]
+    fn markdown_lint_visitor_says_each_thing_once() {
+        let said = Arc::new(Mutex::new(HashSet::new()));
+        let (tx, _rx) = mpsc::sync_channel::<Vec<Violation>>(0);
+        let visitor = MarkdownLintVisitor::new(Linter::new(vec![]), GlobSet::empty(), tx)
+            .saying_each_thing_once(Arc::clone(&said));
+
+        visitor.say("one thing");
+        visitor.say("one thing");
+
+        assert!(said.lock().is_ok_and(|note| note.len() == 1));
+    }
+
+    #[test]
+    fn markdown_lint_visitor_factory_sharing() -> miette::Result<()> {
+        let (tx, _rx) = mpsc::sync_channel::<Vec<Violation>>(0);
+        let first = MarkdownLintVisitorFactory::new(Config::default(), tx)?;
+        let second = first.sharing();
+
+        assert!(Arc::ptr_eq(&first.said, &second.said));
         Ok(())
     }
 

@@ -79,9 +79,17 @@ impl ParallelLintRunner {
         // walk the batch has no visitor for would go unwalked without a word.
         let at_once = walks_at_once(thread_budget(), self.walkers.len()).max(1);
         let mut remaining = self.walkers;
-        let mut builders = (0..at_once.min(remaining.len()))
-            .map(|_| MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone()))
-            .collect::<Result<Vec<_>>>()?;
+        // The visitors share one note of what has been said, so a broken
+        // ignore file several groups read is reported once for the run.
+        let wanted = at_once.min(remaining.len());
+        let mut builders: Vec<MarkdownLintVisitorFactory> = Vec::with_capacity(wanted);
+        for _ in 0..wanted {
+            let next = match builders.first() {
+                Some(first) => first.sharing(),
+                None => MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone())?,
+            };
+            builders.push(next);
+        }
         while !remaining.is_empty() {
             let rest = remaining.split_off(remaining.len().min(at_once));
             thread::scope(|scope| {

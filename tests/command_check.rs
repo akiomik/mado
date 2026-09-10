@@ -479,6 +479,33 @@ fn check_reads_gitignore_over_an_ignore_file_it_does_not_respect() -> Result<()>
 }
 
 #[test]
+fn check_reports_a_broken_glob_two_groups_read_once() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/d1/.gitignore", "{a\n"),
+            ("proj/d1/docs/.gitignore", "nothing.md\n"),
+            ("proj/d1/docs/a.md", "# Fine\n"),
+            ("proj/d1/docs/deep/b.md", "# Fine\n"),
+        ],
+        |root| {
+            // The two names need different files handed back, so they walk as
+            // two groups, and the file both are handed is one file with one
+            // thing wrong with it.
+            let output = check_in(&root.join("proj"), &["d1/docs", "d1/docs/deep"])
+                .output()
+                .into_diagnostic()?;
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let complaints = stderr
+                .lines()
+                .filter(|line| line.contains("error parsing glob"))
+                .count();
+            assert_eq!(complaints, 1);
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn check_keeps_ignore_ahead_of_gitignore_without_git_metadata() -> Result<()> {
     with_tree(CONFLICTING_KINDS, |root| {
         let assert = check_in(&root.join("proj"), &["docs/sub"]).assert();
