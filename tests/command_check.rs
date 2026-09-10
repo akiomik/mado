@@ -500,6 +500,28 @@ fn check_reads_an_anchored_parent_pattern_for_a_path_spelled_with_a_step_back() 
     )
 }
 
+#[test]
+fn check_walks_the_directory_a_name_that_undoes_itself_lands_in() -> Result<()> {
+    with_tree(
+        &[("docs/bad.md", "#Hello."), ("top.md", "#Hello.")],
+        |root| {
+            // `docs/..` is the directory mado was started in, not nothing at all.
+            let assert = check_in(root, &["docs/.."]).assert();
+            assert.failure().stdout(indoc! {"
+            ./docs/bad.md:1:1: MD018 No space after hash on atx style header
+            ./docs/bad.md:1:1: MD041 First line in file should be a top level header
+            ./docs/bad.md:1:1: MD047 File should end with a single newline character
+            ./top.md:1:1: MD018 No space after hash on atx style header
+            ./top.md:1:1: MD041 First line in file should be a top level header
+            ./top.md:1:1: MD047 File should end with a single newline character
+
+            Found 6 errors.
+        "});
+            Ok(())
+        },
+    )
+}
+
 #[cfg(unix)]
 #[test]
 fn check_does_not_read_the_boundary_gitignore_for_a_tree_a_link_leads_out_to() -> Result<()> {

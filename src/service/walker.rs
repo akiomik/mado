@@ -354,7 +354,9 @@ impl WalkParallelBuilder {
             }
         }
 
-        kept.iter().collect()
+        // A name that undoes itself, such as `docs/..`, names the directory
+        // mado was started in, and the walk has to be given one to open.
+        Self::named(&kept.iter().collect::<PathBuf>())
     }
 
     /// One walker per set of patterns that need the same ignore files handed
