@@ -13,6 +13,40 @@ use miette::IntoDiagnostic as _;
 use miette::Result;
 use miette::miette;
 
+/// What the walker would spend on a walk of its own on a machine with `cores`.
+/// Its own default stops at twelve however many there are, and a walk mado
+/// sizes by hand would pass that without stopping there as well.
+fn budget_for(cores: usize) -> usize {
+    cores.min(12)
+}
+
+/// `budget_for` this machine.
+pub(crate) fn thread_budget() -> usize {
+    budget_for(thread::available_parallelism().map_or(1, NonZero::get))
+}
+
+/// How many of `walks` walks may run alongside each other on `budget` threads.
+pub(crate) fn walks_at_once(budget: usize, walks: usize) -> usize {
+    walks.min(budget).max(1)
+}
+
+/// What one walk may spend on itself where a command makes `walks` of them, and
+/// `0` -- as many as it likes -- where it makes only one. Between them the ones
+/// running alongside each other spend no more than `budget`.
+pub(crate) fn threads_per_walk(budget: usize, walks: usize) -> usize {
+    if walks < 2 {
+        return 0;
+    }
+
+    #[expect(
+        clippy::integer_division_remainder_used,
+        reason = "sharing a budget out is what division is for, and what is left over is meant to be dropped"
+    )]
+    let threads = budget / walks_at_once(budget, walks);
+
+    threads.max(1)
+}
+
 #[non_exhaustive]
 pub struct WalkParallelBuilder;
 
@@ -252,10 +286,14 @@ impl WalkParallelBuilder {
                 if let Some(err) = builder.add_ignore(file)
                     && !respect_gitignore
                     && !err.is_io()
-                    && !reported.contains(file)
                 {
-                    reported.push(file.clone());
-                    eprintln!("{err}");
+                    // Two groups can name one file two ways, and it is still
+                    // one file with one thing wrong with it.
+                    let at = file.canonicalize().unwrap_or_else(|_| file.clone());
+                    if !reported.contains(&at) {
+                        reported.push(at);
+                        eprintln!("{err}");
+                    }
                 }
             }
         }
@@ -308,19 +346,11 @@ impl WalkParallelBuilder {
             }
         }
 
-        // The runner runs a machine's worth of groups alongside each other, so
-        // the machine is shared out between them rather than handed whole to
-        // each in turn: a walk of its own for every group would spend more on
-        // starting threads than on walking.
-        let threads = if groups.len() > 1 {
-            thread::available_parallelism()
-                .map_or(1, NonZero::get)
-                .div_ceil(groups.len())
-        } else {
-            // As many as the walk likes, which is what it did before there
-            // was ever more than one of them.
-            0
-        };
+        // The runner runs several of these alongside each other, so the walks
+        // share out between them what one of them would have spent: a walk of
+        // its own for every group would spend more on starting threads than on
+        // walking.
+        let threads = threads_per_walk(thread_budget(), groups.len());
         let mut reported = vec![];
         groups
             .iter()
@@ -371,7 +401,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
-    use super::WalkParallelBuilder;
+    use super::{WalkParallelBuilder, budget_for, threads_per_walk, walks_at_once};
 
     struct PathCollector {
         paths: Arc<Mutex<Vec<PathBuf>>>,
@@ -516,6 +546,32 @@ mod tests {
     fn build_empty_patterns() {
         let result = WalkParallelBuilder::build(&[], true, true);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn the_budget_is_what_the_walker_would_have_spent() {
+        // The walker's own default stops at twelve however many cores it is
+        // run on, and a walk mado sizes by hand would pass it without this.
+        assert_eq!(budget_for(64), 12);
+        assert_eq!(budget_for(12), 12);
+        assert_eq!(budget_for(4), 4);
+    }
+
+    #[test]
+    fn walks_never_spend_more_than_one_of_them_would() {
+        for budget in [1_usize, 2, 8, 10, 12] {
+            // One walk is left to spend what the walker would have on it.
+            assert_eq!(threads_per_walk(budget, 1), 0);
+            assert_eq!(walks_at_once(budget, 1), 1);
+
+            // Several share it out between them instead.
+            for walks in [2_usize, 3, 5, 7, 12, 13, 200] {
+                let at = format!("{budget} threads over {walks} walks");
+                let threads = threads_per_walk(budget, walks);
+                assert!(threads >= 1, "{at}");
+                assert!(walks_at_once(budget, walks) * threads <= budget, "{at}");
+            }
+        }
     }
 
     #[test]

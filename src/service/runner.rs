@@ -2,7 +2,6 @@ extern crate alloc;
 
 use alloc::sync::Arc;
 use comrak::Arena;
-use core::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, mpsc};
 use std::thread;
@@ -13,7 +12,7 @@ use miette::{IntoDiagnostic as _, Result};
 
 use super::Linter;
 use super::visitor::MarkdownLintVisitorFactory;
-use super::walker::WalkParallelBuilder;
+use super::walker::{WalkParallelBuilder, thread_budget, walks_at_once};
 use crate::config::Config;
 use crate::{Document, Violation};
 
@@ -75,7 +74,7 @@ impl ParallelLintRunner {
         // Each walk holds its visitor for as long as it runs, so the groups
         // run in batches of as many as the machine has to give, one visitor
         // apiece, rather than one after another.
-        let concurrency = thread::available_parallelism().map_or(1, NonZero::get);
+        let concurrency = walks_at_once(thread_budget(), self.walkers.len());
         let mut remaining = self.walkers;
         let mut builders = (0..concurrency.min(remaining.len()))
             .map(|_| MarkdownLintVisitorFactory::new(self.config.clone(), tx.clone()))

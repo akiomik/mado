@@ -527,6 +527,7 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
             ("proj/d1/docs/a.md", "# Fine\n"),
             ("proj/d2/.ignore", "x\n"),
             ("proj/d2/docs/a.md", "# Fine\n"),
+            ("proj/sub/keep.md", "# Fine\n"),
         ],
         |root| {
             let proj = root.join("proj");
@@ -536,7 +537,9 @@ fn check_reports_a_broken_glob_in_a_parent_ignore_file_once() -> Result<()> {
             )
             .into_diagnostic()?;
 
-            let output = check_in(&proj, &["d1/docs", "d2/docs"])
+            // The third names the same broken file as the first, by another
+            // route, and it is still one file with one thing wrong with it.
+            let output = check_in(&proj, &["d1/docs", "d2/docs", "sub/../d1/docs"])
                 .output()
                 .into_diagnostic()?;
             let stderr = String::from_utf8_lossy(&output.stderr);
