@@ -549,6 +549,32 @@ fn check_does_not_read_the_boundary_gitignore_for_a_tree_a_link_leads_out_to() -
 
 #[cfg(unix)]
 #[test]
+fn check_does_not_read_the_boundary_gitignore_for_a_link_named_on_its_own() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "ignored.md\n"),
+            ("outside/ignored.md", "#Hello."),
+        ],
+        |root| {
+            symlink(root.join("outside"), root.join("proj/link")).into_diagnostic()?;
+
+            // The walk descends into the name it was given, so where that name
+            // leads counts as much as where the ones above it lead.
+            let assert = check_in(&root.join("proj"), &["link"]).assert();
+            assert.failure().stdout(indoc! {"
+                link/ignored.md:1:1: MD018 No space after hash on atx style header
+                link/ignored.md:1:1: MD041 First line in file should be a top level header
+                link/ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[cfg(unix)]
+#[test]
 fn check_keeps_a_step_back_that_follows_a_link() -> Result<()> {
     with_tree(
         &[

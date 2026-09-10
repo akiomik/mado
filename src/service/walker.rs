@@ -219,16 +219,18 @@ impl WalkParallelBuilder {
         if Self::is_repository_root(pattern) {
             return None;
         }
-        // The walk reads the ignore files of a directory it is handed, so for
-        // one only what is above it is left to put back.
-        if pattern
-            .canonicalize()
-            .is_ok_and(|path| path == *current_dir)
-        {
-            return Some(vec![]);
-        }
 
-        files
+        // The walk descends into the pattern, so its own last step counts as
+        // much as the ones above it: a name that leaves the boundary anywhere
+        // along its length is bounded by itself, not by what it was written
+        // under.
+        match pattern.canonicalize() {
+            // The walk reads the ignore files of a directory it is handed, so
+            // for the boundary itself only what is above is left to put back.
+            Ok(at) if at == *current_dir => Some(vec![]),
+            Ok(at) if at.starts_with(current_dir) => files,
+            _ => Self::bounds_itself(pattern),
+        }
     }
 
     /// One walker for `patterns`, which need the same ignore files handed
@@ -362,6 +364,11 @@ impl WalkParallelBuilder {
     /// One walker per set of patterns that need the same ignore files handed
     /// back. Which files those are is a property of a single pattern, but
     /// patterns that need the same ones can be walked together.
+    ///
+    /// Each walker is given a share of the threads rather than the run of the
+    /// machine, on the understanding that `walks_at_once` of them are visited
+    /// alongside each other. Visiting them one at a time is correct and slower;
+    /// visiting all of them at once asks the machine for more than it has.
     fn build_from(
         patterns: &[PathBuf],
         current_dir: &Path,
@@ -433,6 +440,8 @@ impl WalkParallelBuilder {
             .collect()
     }
 
+    /// The walkers a command's paths need, ready to be visited. See
+    /// `build_from` for what each of them expects of the visiting.
     #[inline]
     pub fn build(
         patterns: &[PathBuf],
