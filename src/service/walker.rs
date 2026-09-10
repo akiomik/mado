@@ -292,20 +292,25 @@ impl WalkParallelBuilder {
     /// with that step taken off, which the walk up would otherwise read off
     /// the name.
     ///
-    /// A trailing separator is not a step, and neither is a leading `./`,
+    /// A separator on either end is not a step, and neither is a leading `./`,
     /// which the walker takes off a name and a root alike before comparing
-    /// them.
+    /// them. A separator run in the middle of a name is: it is dropped the way
+    /// a `.` is, and leaves the same gap between the name and the answers.
     fn leads_where_it_reads(pattern: &Path) -> bool {
         // `Path::components` drops a `.` that is not the first step, so the
         // steps are counted off the name as it was written. Separators and a
         // `.` are ASCII, which survives a name that is not text being read as
         // text, and re-serialising the name would not: a `/` written on
         // Windows comes back a `\`.
-        let says_nothing = pattern
-            .to_string_lossy()
-            .split(is_separator)
-            .enumerate()
-            .any(|(at, step)| step == "." && at > 0);
+        let written = pattern.to_string_lossy();
+        let steps: Vec<&str> = written.split(is_separator).collect();
+        let last = steps.len().saturating_sub(1);
+        let says_nothing = steps.iter().enumerate().any(|(at, step)| {
+            // A separator run says nothing where it is not the one that
+            // starts the name or the one that ends it, and `Path::components`
+            // drops it the way it drops a `.`.
+            (*step == "." && at > 0) || (step.is_empty() && at > 0 && at < last)
+        });
         if says_nothing {
             return false;
         }

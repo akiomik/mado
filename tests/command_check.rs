@@ -495,6 +495,32 @@ fn check_reads_an_anchored_parent_pattern_for_a_name_that_ends_in_a_separator() 
 }
 
 #[test]
+fn check_bounds_a_name_with_a_separator_run_in_the_middle_of_it() -> Result<()> {
+    with_tree(
+        &[
+            ("proj/.gitignore", "ignored.md\n"),
+            ("proj/docs/ignored.md", "#Hello."),
+            ("proj/docs/keep.md", "# Fine\n"),
+        ],
+        |root| {
+            // A run of separators is dropped the way a `.` is, and leaves the
+            // same gap between the name and the answers the walk builds from
+            // it: read against the file above, `.//docs/ignored.md` arrives
+            // with a leading separator and matches a pattern it should not.
+            let assert = check_in(&root.join("proj"), &[".//docs"]).assert();
+            assert.failure().stdout(indoc! {"
+                .//docs/ignored.md:1:1: MD018 No space after hash on atx style header
+                .//docs/ignored.md:1:1: MD041 First line in file should be a top level header
+                .//docs/ignored.md:1:1: MD047 File should end with a single newline character
+
+                Found 3 errors.
+            "});
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn check_bounds_a_name_that_does_not_lead_where_it_reads() -> Result<()> {
     with_tree(ANCHORED_BELOW_A_SUBDIRECTORY, |root| {
         // `docs/.` has the walk answering about `docs/./ignored.md`, which no
