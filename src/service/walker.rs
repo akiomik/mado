@@ -1,5 +1,6 @@
 use core::num::NonZero;
 use std::env;
+use std::fs;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -127,11 +128,7 @@ impl WalkParallelBuilder {
                     return None;
                 }
                 dirs.reverse();
-                return Some(Self::ignore_files_in(
-                    &dirs,
-                    respect_ignore,
-                    respect_gitignore,
-                ));
+                return Self::ignore_files_in(&dirs, respect_ignore, respect_gitignore);
             }
         }
 
@@ -140,16 +137,33 @@ impl WalkParallelBuilder {
         Self::bounds_itself(dir)
     }
 
+    /// Whether `path` takes something back. A line that opens with a `!` in an
+    /// ignore file undoes what an earlier one said, and the walker ranks an
+    /// `.ignore` over every `.gitignore` wherever the two sit, which nothing
+    /// mado can hand a file back through will do.
+    fn takes_something_back(path: &Path) -> bool {
+        // A `!` opens a line that takes back; one written for itself is
+        // escaped, and so opens with a backslash.
+        fs::read_to_string(path).is_ok_and(|text| text.lines().any(|line| line.starts_with('!')))
+    }
+
     /// The ignore files `dirs` hold, in the order to hand them over. Every
     /// `.gitignore` goes in before any `.ignore` so the kinds stay ranked, and
-    /// each kind outermost first so the nearer file wins within a kind: the
-    /// walker takes the last file it was handed as the one that wins.
+    /// each kind outermost first so the nearer file wins within a kind:
+    /// `WalkBuilder` takes the last file handed to it as the one that wins.
+    ///
+    /// `None` where an `.ignore` over the path takes something back that a
+    /// `.gitignore` under it could be excluding. Handing these files back puts
+    /// them below every file the walk finds for itself, so the walk would drop
+    /// what it should keep -- quietly, and where a clone of the same tree
+    /// keeps it. The walker's own arrangement is left to answer instead, which
+    /// keeps what it should and reports more besides.
     fn ignore_files_in(
         dirs: &[PathBuf],
         respect_ignore: bool,
         respect_gitignore: bool,
-    ) -> Vec<PathBuf> {
-        [
+    ) -> Option<Vec<PathBuf>> {
+        let files: Vec<PathBuf> = [
             (".gitignore", respect_gitignore),
             (".ignore", respect_ignore),
         ]
@@ -157,7 +171,14 @@ impl WalkParallelBuilder {
         .filter(|&(_, wanted)| wanted)
         .flat_map(|(name, _)| dirs.iter().map(move |dir| dir.join(name)))
         .filter(|path| path.is_file())
-        .collect()
+        .collect();
+
+        let takes_back = respect_gitignore
+            && files
+                .iter()
+                .any(|file| file.ends_with(".ignore") && Self::takes_something_back(file));
+
+        (!takes_back).then_some(files)
     }
 
     /// `ignore_files_of` for the directory `pattern` sits in, remembering

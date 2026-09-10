@@ -422,6 +422,48 @@ const CONFLICTING_KINDS: &[(&str, &str)] = &[
     ("proj/docs/sub/conflict.md", "#Hello."),
 ];
 
+/// An `.ignore` above the path taking back what a `.gitignore` under it
+/// excludes. The walker ranks the `.ignore` over the `.gitignore` wherever the
+/// two sit; a file handed back to it ranks under both.
+const TAKEN_BACK_FROM_ABOVE: &[(&str, &str)] = &[
+    ("proj/.ignore", "!ignored.md\n"),
+    ("proj/docs/.gitignore", "ignored.md\n"),
+    ("proj/docs/ignored.md", "#Hello."),
+];
+
+#[test]
+fn check_keeps_what_an_ignore_file_above_the_path_takes_back() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        // Handing the `.ignore` back would rank it under the `.gitignore` and
+        // drop this file, quietly, where a clone of the same tree keeps it.
+        let assert = check_in(&root.join("proj"), &["docs"]).assert();
+        assert.failure().stdout(indoc! {"
+            docs/ignored.md:1:1: MD018 No space after hash on atx style header
+            docs/ignored.md:1:1: MD041 First line in file should be a top level header
+            docs/ignored.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
+}
+
+#[test]
+fn check_keeps_what_an_ignore_file_above_the_path_takes_back_in_a_repository() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        create_dir_all(root.join("proj/.git")).into_diagnostic()?;
+        let assert = check_in(&root.join("proj"), &["docs"]).assert();
+        assert.failure().stdout(indoc! {"
+            docs/ignored.md:1:1: MD018 No space after hash on atx style header
+            docs/ignored.md:1:1: MD041 First line in file should be a top level header
+            docs/ignored.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
+}
+
 #[test]
 fn check_keeps_ignore_ahead_of_gitignore_without_git_metadata() -> Result<()> {
     with_tree(CONFLICTING_KINDS, |root| {
