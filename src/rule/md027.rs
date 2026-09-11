@@ -102,8 +102,10 @@ impl MD027 {
         Some(positions)
     }
 
-    /// How wide `text` is, written at column `from`, with each tab taking the
-    /// columns up to the next stop of four as `CommonMark` expands them.
+    /// How wide `text` is, starting `from` columns into the line, with each tab
+    /// taking the columns up to the next stop of four as `CommonMark` expands them.
+    /// `from` is a width rather than a column: the first column of a line is 0 of
+    /// them.
     fn expanded_width(text: &str, from: usize) -> usize {
         text.chars().fold(0, |width, character| {
             width
