@@ -51,9 +51,11 @@ parsed and therefore what gets reported.
   move in both directions: `> **bold` followed by `> span.** tail here` was
   reported at the text after the strong and is not any more, one space following
   both markers, while `> **bold` followed by `>  span**` went unreported and now
-  is, the two spaces after its marker having gone unread. A reported line names
-  the content after the marker through to the end of the line, where it named the
-  first inline on the line (#439)
+  is, the two spaces after its marker having gone unread. A line below the one a
+  nested quote starts at is measured at each of that quote's own markers rather
+  than at the innermost alone, so `>  >  >  text` written there is reported once
+  per marker. A reported line names the content after the marker through to the
+  end of the line, where it named the first inline on the line (#439)
 
 ## [0.3.2] - 2026-09-07
 

@@ -23,11 +23,11 @@ impl MD027 {
         Self {}
     }
 
-    /// The content of line `lineno` from where it begins to the end of the line,
-    /// when more than one space or tab separates it from the innermost of the
-    /// `depth` blockquote markers that follow byte `offset`. One of those spaces
-    /// belongs to the marker, per `CommonMark`, and the rest is what this rule
-    /// reports.
+    /// What line `lineno` carries more than one space or tab of, after each of
+    /// the `own_markers` innermost of the `markers` blockquote markers that follow
+    /// byte `offset`. One space after a marker belongs to it, per `CommonMark`,
+    /// and the rest is what this rule reports: from where what follows it begins
+    /// to the end of the line.
     ///
     /// The line is read rather than the inlines on it, since an inline that
     /// opened on an earlier line leaves the first inline of this one beginning
@@ -40,35 +40,48 @@ impl MD027 {
     /// marker is a list item's own, and comrak has already said which column the
     /// marker is at.
     ///
-    /// `None` for a line with nothing to report, and for one that does not carry
-    /// `depth` markers after `offset`: a lazy continuation line carries none, and
-    /// its text is not a prefix however much like one it reads.
-    fn indented_content_position(
+    /// `markers` beyond `own_markers` are read and not measured: a list item
+    /// between two quotes indents the inner one, and that indentation is the
+    /// item's to answer for rather than either quote's.
+    ///
+    /// `None` for a line that does not carry `markers` markers after `offset`,
+    /// which is how a lazy continuation line is left alone. Text that happens to
+    /// hold a `>` is not a prefix, though indentation before one is read as the
+    /// prefix it looks like.
+    fn indented_content_positions(
         lines: &[String],
         lineno: usize,
-        depth: usize,
+        markers: usize,
+        own_markers: usize,
         offset: usize,
-    ) -> Option<Sourcepos> {
+    ) -> Option<Vec<Sourcepos>> {
         let line = lines.get(lineno.checked_sub(1)?)?;
-        let mut after_markers = line.get(offset..)?;
+        let mut rest = line.get(offset..)?;
         let mut prefix_len = offset;
+        let mut positions = vec![];
 
-        for _ in 0..depth {
-            let at_marker = after_markers.trim_start_matches([' ', '\t']);
-            let spaces = after_markers.len() - at_marker.len();
-            after_markers = at_marker.strip_prefix('>')?;
+        for marker in 0..markers {
+            let at_marker = rest.trim_start_matches([' ', '\t']);
+            let spaces = rest.len() - at_marker.len();
+
+            if marker + own_markers > markers && spaces > 1 {
+                let column = prefix_len + spaces + 1;
+                positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
+            }
+
+            rest = at_marker.strip_prefix('>')?;
             prefix_len += spaces + 1;
         }
 
-        let content = after_markers.trim_start_matches([' ', '\t']);
-        let spaces = after_markers.len() - content.len();
+        let content = rest.trim_start_matches([' ', '\t']);
+        let spaces = rest.len() - content.len();
 
-        if spaces < 2 || content.trim().is_empty() {
-            return None;
+        if spaces > 1 && !content.trim().is_empty() {
+            let column = prefix_len + spaces + 1;
+            positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
         }
 
-        let column = prefix_len + spaces + 1;
-        Some(Sourcepos::from((lineno, column, lineno, line.len())))
+        Some(positions)
     }
 
     /// How many blockquotes `node`, itself a blockquote, is quoted by, itself
@@ -76,6 +89,14 @@ impl MD027 {
     fn block_quote_depth<'a>(node: &'a AstNode<'a>) -> usize {
         node.ancestors()
             .filter(|ancestor| ancestor.data.borrow().value == NodeValue::BlockQuote)
+            .count()
+    }
+
+    /// How many blockquotes `node`, itself a blockquote, is quoted by with nothing
+    /// but another blockquote in between, itself included.
+    fn nested_block_quotes<'a>(node: &'a AstNode<'a>) -> usize {
+        node.ancestors()
+            .take_while(|ancestor| ancestor.data.borrow().value == NodeValue::BlockQuote)
             .count()
     }
 }
@@ -97,21 +118,30 @@ impl RuleLike for MD027 {
                 match &child_node.data.borrow().value {
                     NodeValue::Paragraph => {
                         let block_quote_position = node.data.borrow().sourcepos;
-                        let depth = Self::block_quote_depth(node);
                         let paragraph_position = child_node.data.borrow().sourcepos;
                         for lineno in paragraph_position.start.line..=paragraph_position.end.line {
                             // The quote's own marker on the line it starts at, and
                             // the whole prefix on every line after, where nothing
                             // but the quote's markers can precede the content.
-                            let (markers, offset) = if lineno == block_quote_position.start.line {
-                                (1, block_quote_position.start.column.saturating_sub(1))
-                            } else {
-                                (depth, 0)
-                            };
+                            let (markers, own_markers, offset) =
+                                if lineno == block_quote_position.start.line {
+                                    (1, 1, block_quote_position.start.column.saturating_sub(1))
+                                } else {
+                                    (
+                                        Self::block_quote_depth(node),
+                                        Self::nested_block_quotes(node),
+                                        0,
+                                    )
+                                };
 
-                            if let Some(position) =
-                                Self::indented_content_position(&doc.lines, lineno, markers, offset)
-                            {
+                            let positions = Self::indented_content_positions(
+                                &doc.lines,
+                                lineno,
+                                markers,
+                                own_markers,
+                                offset,
+                            );
+                            for position in positions.into_iter().flatten() {
                                 let violation = self.to_violation(doc.path.clone(), position);
                                 violations.push(violation);
                             }
@@ -389,14 +419,12 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((1, 4, 3, 55))),
             rule.to_violation(path.clone(), Sourcepos::from((1, 7, 3, 55))),
             rule.to_violation(path.clone(), Sourcepos::from((1, 10, 1, 58))),
+            rule.to_violation(path.clone(), Sourcepos::from((3, 4, 3, 55))),
+            rule.to_violation(path.clone(), Sourcepos::from((3, 7, 3, 55))),
             rule.to_violation(path, Sourcepos::from((3, 10, 3, 55))),
-            // TODO: This results are expected
+            // TODO: The outer two are expected to name line 1 alone
             // rule.to_violation(path.clone(), Sourcepos::from((1, 4, 1, 58))),
             // rule.to_violation(path.clone(), Sourcepos::from((1, 7, 1, 58))),
-            // rule.to_violation(path.clone(), Sourcepos::from((1, 10, 1, 58))),
-            // rule.to_violation(path.clone(), Sourcepos::from((3, 4, 3, 55))),
-            // rule.to_violation(path.clone(), Sourcepos::from((3, 7, 3, 55))),
-            // rule.to_violation(path, Sourcepos::from((3, 10, 3, 55))),
         ];
         assert_eq!(actual, expected);
         Ok(())
@@ -415,6 +443,23 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((2, 6, 2, 10)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_nested_block_quotes4() -> Result<()> {
+        let text = indoc! {"
+            > > Quoted text
+            >  > More quoted text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 21)))];
         assert_eq!(actual, expected);
         Ok(())
     }
