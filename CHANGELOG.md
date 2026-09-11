@@ -43,6 +43,26 @@ parsed and therefore what gets reported.
   `config::lint::GitignorePolicy` rather than a `bool`, and
   `service::walker::WalkParallelBuilder::build` takes one (#436)
 
+### Fixed
+
+- MD027: measure a quoted paragraph's line from the line itself rather than from
+  the first inline reported on it, which an inline spanning two lines leaves
+  beginning where it closed rather than where the line's content does. Reports
+  move in both directions: `> **bold` followed by `> span.** tail here` was
+  reported at the text after the strong and is not any more, one space following
+  both markers, while `> **bold` followed by `>  span**` went unreported and now
+  is, the two spaces after its marker having gone unread. A line below the one a
+  nested quote starts at is measured at each of that quote's own markers rather
+  than at the innermost alone, so `>  >  >  text` written there is reported once
+  per marker, and a line carrying no marker at all is left alone rather than
+  measured at the first inline on it. Two shapes change answer the other way: a
+  line reaching its quote through a list item's indentation goes unreported
+  (#456), and one whose `>` is indented far enough for CommonMark to read it as
+  text is reported for the spaces after it (#455). The position a violation
+  carries runs from the content after the marker to the end of the line, where it
+  ran to the end of the first inline on it; no output format prints that, so it is
+  for a library caller reading `Violation::position()` (#439)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added
