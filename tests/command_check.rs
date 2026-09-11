@@ -562,6 +562,50 @@ fn check_says_which_ignore_file_sent_gitignore_back_to_git() -> Result<()> {
     })
 }
 
+/// A repository below the path being linted, holding a file the `.gitignore`
+/// above the repository names.
+const REPOSITORY_BELOW: &[(&str, &str)] = &[
+    ("proj/.gitignore", "lib/\n"),
+    ("proj/vendor/lib/inner.md", "#Hello."),
+];
+
+#[test]
+fn check_applies_a_gitignore_above_a_repository_inside_it() -> Result<()> {
+    with_tree(REPOSITORY_BELOW, |root| {
+        let proj = root.join("proj");
+        create_dir_all(proj.join("vendor/.git")).into_diagnostic()?;
+
+        // Git would not ignore this file: `proj/.gitignore` is outside the
+        // repository holding it. mado has one flag for two jobs -- reading
+        // `.gitignore` without Git metadata also stops the walker bounding
+        // itself at a repository below -- so the file is excluded here and
+        // `main` reports it. This pins #440 rather than blessing it.
+        let assert = check_in(&proj, &["."]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn check_applies_a_gitignore_above_a_repository_the_path_is_in() -> Result<()> {
+    with_tree(REPOSITORY_BELOW, |root| {
+        let proj = root.join("proj");
+        create_dir_all(proj.join("vendor/.git")).into_diagnostic()?;
+
+        // Named from inside the repository, the boundary is the repository
+        // root and nothing above it is read, which is what Git does.
+        let assert = check_in(&proj.join("vendor"), &["."]).assert();
+        assert.failure().stdout(indoc! {"
+            ./lib/inner.md:1:1: MD018 No space after hash on atx style header
+            ./lib/inner.md:1:1: MD041 First line in file should be a top level header
+            ./lib/inner.md:1:1: MD047 File should end with a single newline character
+
+            Found 3 errors.
+        "});
+        Ok(())
+    })
+}
+
 #[test]
 fn check_says_nothing_about_a_path_that_is_not_a_directory() -> Result<()> {
     with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
