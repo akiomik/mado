@@ -266,8 +266,6 @@ fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
     })
 }
 
-/// Lays out a tree of files under a temporary directory. A path ending in `/`
-/// is created as an empty directory.
 /// Fails where an `.ignore` above `root` takes a path back with a `!` line.
 /// mado reads every parent directory looking for one, so a file like that on
 /// the machine running the tests changes what these trees report, and the
@@ -289,6 +287,8 @@ fn nothing_above_takes_a_path_back(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Lays out a tree of files under a temporary directory. A path ending in `/`
+/// is created as an empty directory.
 fn with_tree<F>(entries: &[(&str, &str)], f: F) -> Result<()>
 where
     F: FnOnce(&Path) -> Result<()>,
@@ -558,6 +558,20 @@ fn check_says_which_ignore_file_sent_gitignore_back_to_git() -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(stderr.lines().count(), 1);
         assert!(stderr.contains(".ignore: takes a path back"));
+        Ok(())
+    })
+}
+
+#[test]
+fn check_says_nothing_about_a_path_that_is_not_a_directory() -> Result<()> {
+    with_tree(TAKEN_BACK_FROM_ABOVE, |root| {
+        let proj = root.join("proj");
+        write(proj.join("loose.md"), "# Fine\n").into_diagnostic()?;
+
+        // The walk hands a file back without asking any ignore file about it,
+        // so which files mado would have handed over changes nothing for it.
+        let assert = check_in(&proj, &["loose.md"]).assert();
+        assert.success().stderr("");
         Ok(())
     })
 }

@@ -423,10 +423,13 @@ impl WalkParallelBuilder {
             // left to answer instead, which keeps what it should and reports
             // more besides. There is nothing to arrange where the walker finds
             // the files itself, which is what `None` says, nor where `.ignore`
-            // files go unread and nothing stands over the walk's own answers.
-            let taken_back = (files.is_some() && respect_ignore && respect_gitignore)
-                .then(|| Self::taken_back_over(pattern, &mut taken))
-                .flatten();
+            // files go unread and nothing stands over the walk's own answers,
+            // nor for a path that is not a directory, which the walk hands back
+            // without asking any ignore file about it.
+            let taken_back =
+                (files.is_some() && pattern.is_dir() && respect_ignore && respect_gitignore)
+                    .then(|| Self::taken_back_over(pattern, &mut taken))
+                    .flatten();
             if let Some(file) = taken_back {
                 files = None;
                 if !explained.contains(&file) {
