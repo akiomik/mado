@@ -64,20 +64,30 @@ impl MD027 {
                 rest.trim_start_matches([' ', '\t'])
             };
             let spaces = rest.len() - at_marker.len();
+            let owned = marker + own_markers > markers;
 
-            let Some(after_marker) = at_marker.strip_prefix('>') else {
-                if marker + own_markers > markers && spaces > 1 && !at_marker.is_empty() {
+            // A marker takes one space of its own and three of indentation, per
+            // `CommonMark`, and a tab stands for four columns of the latter. Past
+            // that the `>` is text, and the spaces are the previous marker's
+            // content rather than indentation. Only a gap this quote answers for is
+            // held to it: one a list item indents is the item's, and as wide as the
+            // item is.
+            let columns = spaces + 3 * rest.get(..spaces)?.matches('\t').count();
+            let marker_here = at_marker.starts_with('>') && !(owned && columns > 4);
+
+            if !marker_here {
+                if owned && spaces > 1 && !at_marker.is_empty() {
                     positions.push(content_position(prefix_len + spaces + 1));
                 }
 
                 return Some(positions);
-            };
+            }
 
-            if marker + own_markers > markers && spaces > 1 {
+            if owned && spaces > 1 {
                 positions.push(content_position(prefix_len + spaces + 1));
             }
 
-            rest = after_marker;
+            rest = at_marker.get(1..)?;
             prefix_len += spaces + 1;
         }
 
@@ -330,6 +340,25 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((1, 10, 1, 22)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: The `>` on line 2 is five columns in, past the four a marker takes,
+    // so it is text and the spaces before it are the outer marker's content.
+    #[test]
+    fn check_errors_paragraph_with_over_indented_marker() -> Result<()> {
+        let text = indoc! {"
+            > > Quoted text
+            >     >  More text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 7, 2, 18)))];
         assert_eq!(actual, expected);
         Ok(())
     }

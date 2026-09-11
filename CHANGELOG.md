@@ -55,7 +55,9 @@ parsed and therefore what gets reported.
   nested quote starts at is measured at each of that quote's own markers rather
   than at the innermost alone, so `>  >  >  text` written there is reported once
   per marker, and a line carrying no marker at all is left alone rather than
-  measured at the first inline on it (#439)
+  measured at the first inline on it, as is a line that reaches its quote through
+  a list item, which the second line of `> - >  first` does and which is reported
+  no longer (#439, #456)
 
 ## [0.3.2] - 2026-09-07
 
