@@ -35,12 +35,15 @@ impl MD027 {
     /// starts at, the one line a list item's marker can precede.
     ///
     /// The quote owns the innermost `own_markers` of the `markers` quoting the
-    /// line, and the spaces before an outer one are the indentation of whatever
-    /// holds it rather than any quote's. A line carrying fewer markers than that
-    /// is measured for as many as it carries, and one carrying none is left alone.
+    /// line. The spaces before the outermost it owns are the indentation of
+    /// whatever holds that marker rather than any quote's, and go unmeasured; the
+    /// ones after it are the quote's. A line carrying fewer markers than it is
+    /// quoted by is measured for as many as it carries, and one carrying none is
+    /// left alone.
     ///
-    /// What this reads as a prefix and `CommonMark` does not is #455, and what it
-    /// cannot tell from a list item's indentation is #456.
+    /// What this reads as a prefix and `CommonMark` does not is #455, what it
+    /// cannot tell from a list item's indentation is #456, and the tab it counts
+    /// as one space here and as its own width above is #458.
     ///
     /// `None` for a line `lines` does not hold, and for one the `offset` is not
     /// within. The caller reports nothing for either.
@@ -291,8 +294,8 @@ mod tests {
         Ok(())
     }
 
-    // NOTE: A line of whitespace CommonMark does not end a line with is content,
-    // and the content of this one begins two spaces after the marker.
+    // NOTE: A line of whitespace `CommonMark` does not end a line with is
+    // content, and the content of this one begins two spaces after the marker.
     #[test]
     fn check_errors_paragraph_with_unicode_whitespace() -> Result<()> {
         let text = indoc! {"

@@ -57,7 +57,7 @@ parsed and therefore what gets reported.
   per marker, and a line carrying no marker at all is left alone rather than
   measured at the first inline on it. Two shapes change answer the other way: a
   line reaching its quote through a list item's indentation goes unreported
-  (#456), and one whose `>` is indented far enough for `CommonMark` to read it as
+  (#456), and one whose `>` is indented far enough for CommonMark to read it as
   text is reported for the spaces after it (#455). The position a violation
   carries runs from the content after the marker to the end of the line, where it
   ran to the end of the first inline on it; no output format prints that, so it is
