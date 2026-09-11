@@ -23,35 +23,24 @@ impl MD027 {
         Self {}
     }
 
-    /// What line `lineno` carries more than one space or tab of, after each of
-    /// the `own_markers` innermost of the `markers` blockquote markers that follow
-    /// byte `offset`. One space after a marker belongs to it, per `CommonMark`,
-    /// and the rest is what this rule reports: from where what follows it begins
-    /// to the end of the line.
+    /// Where line `lineno` carries more than one space or tab after a blockquote
+    /// marker the quote owns, from what follows the spaces to the end of the line.
+    /// One space after a marker belongs to it, per `CommonMark`.
     ///
-    /// The line is read rather than the inlines on it, since an inline that
-    /// opened on an earlier line leaves the first inline of this one beginning
-    /// wherever that inline closed.
+    /// The line is read rather than the inlines on it, since an inline that opened
+    /// on an earlier line leaves the first inline of this one beginning wherever
+    /// that inline closed. Its markers are read off it too, the same nesting being
+    /// written at different columns from one line to the next, as `>>` and `> >`
+    /// are. `offset` skips to the marker comrak measured on the line the quote
+    /// starts at, the one line a list item's marker can precede.
     ///
-    /// The markers are counted off the line itself rather than taken from the
-    /// column the quote started at, which is a column the same nesting can be
-    /// written at differently from one line to the next, as `>>` and `> >` are.
-    /// `offset` is for the line the quote starts at, where what precedes the
-    /// marker is a list item's own, and comrak has already said which column the
-    /// marker is at.
+    /// The quote owns the innermost `own_markers` of the `markers` quoting the
+    /// line, and the spaces before an outer one are the indentation of whatever
+    /// holds it rather than any quote's. A line carrying fewer markers than that
+    /// is measured for as many as it carries, and one carrying none is left alone.
     ///
-    /// `markers` beyond `own_markers` are read and not measured: a list item
-    /// between two quotes indents the inner one, and that indentation is the
-    /// item's to answer for rather than either quote's.
-    ///
-    /// A line that carries fewer markers than the quote stops being measured
-    /// there, with what follows the last marker it carries measured as that
-    /// marker's content if the quote owns that marker: `> > Quoted` followed by
-    /// `>   lazy` is three spaces after the outer marker. A line carrying no
-    /// marker at all is left alone, text that happens to hold a `>` included.
-    /// Spaces before the first marker are read as the prefix they look like,
-    /// however many; a tab there is not, which leaves a quote a list item indents
-    /// with one unmeasured on that line.
+    /// What this reads as a prefix and `CommonMark` does not is #455, and what it
+    /// cannot tell from a list item's indentation is #456.
     ///
     /// `None` for a line `lines` does not hold, and for one the `offset` is not
     /// within. The caller reports nothing for either.
@@ -143,7 +132,8 @@ impl RuleLike for MD027 {
                             // The quote's own marker on the line it starts at,
                             // where comrak has already said which column it is at
                             // and a list item's marker can precede it. Every line
-                            // after carries the prefix and is read from its start.
+                            // after is read from its start, for the markers it
+                            // carries of the ones quoting it.
                             let (markers, own_markers, offset) =
                                 if lineno == block_quote_position.start.line {
                                     (1, 1, block_quote_position.start.column.saturating_sub(1))
