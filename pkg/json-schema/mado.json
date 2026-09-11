@@ -16,9 +16,10 @@
           "default": true
         },
         "respect-gitignore": {
-          "description": "Exclude files that are ignored by .gitignore",
-          "type": "boolean",
-          "default": true
+          "description": "When .gitignore files are read: never, only inside a Git repository as Git does, or always, whether or not the tree carries Git metadata. With \"always\", .gitignore files apply from every parent directory and a repository below the path being linted does not bound the search",
+          "type": "string",
+          "enum": ["never", "repository-only", "always"],
+          "default": "repository-only"
         },
         "output-format": {
           "description": "Output format for violations",

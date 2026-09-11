@@ -36,12 +36,34 @@ pub use md036::MD036;
 pub use md041::MD041;
 pub use md046::MD046;
 
+/// When `.gitignore` files are read.
+///
+/// Git itself only applies them inside a repository, and the `ignore` crate
+/// follows it. A tree that arrives without its Git metadata -- a source
+/// archive, a Docker context copied without `.git` -- therefore lints
+/// differently from a clone of the same tree unless asked otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum GitignorePolicy {
+    /// Never, whatever the tree carries.
+    Never,
+    /// Inside a repository, as Git does.
+    #[default]
+    RepositoryOnly,
+    /// Whether or not the tree carries Git metadata. Without a repository to
+    /// stop at, `.gitignore` files apply from every parent directory, and a
+    /// repository below the path being linted does not bound the search --
+    /// the same terms `rg --no-require-git` has.
+    Always,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 #[allow(clippy::exhaustive_structs)]
 pub struct Lint {
     pub respect_ignore: bool,
-    pub respect_gitignore: bool,
+    pub respect_gitignore: GitignorePolicy,
     pub output_format: Format,
     pub quiet: bool,
     pub exclude: Vec<Glob>,
@@ -263,7 +285,7 @@ impl Default for Lint {
     fn default() -> Self {
         Self {
             respect_ignore: true,
-            respect_gitignore: true,
+            respect_gitignore: GitignorePolicy::default(),
             output_format: Format::Concise,
             quiet: false,
             exclude: vec![],

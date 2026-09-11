@@ -1,6 +1,6 @@
 [lint]
 respect-ignore = true
-respect-gitignore = true
+respect-gitignore = "repository-only"
 output-format = "concise"
 quiet = false
 exclude = []
