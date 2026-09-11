@@ -21,6 +21,32 @@ fails inside that build rather than in anything the change touched. `just test`
 does not need a C++ one, for the `false`s in `fuzz/Cargo.toml`, and neither does
 CI's coverage job. CI's Clippy job installs `g++` on a runner that has none.
 
+## Changing a configuration key's shape
+
+`mado.toml` here is read by two mado binaries: the one built from the branch,
+and the newest published release, which the `Download` job in
+`.github/workflows/ci-action.yml` runs over this checkout through the action.
+That job is also the Markdown quality gate for this repository — nothing else
+lints these documents — so it cannot be pointed at a fixture instead.
+
+Adding a key is safe, and so is removing or renaming one: the release ignores
+keys it does not know and gives absent ones their defaults. What it cannot read
+is an existing key whose type has changed, or a value it has never heard of,
+such as a variant added to an enum. It fails to load the file, and the job fails
+before it lints anything.
+
+A change of that kind therefore lands in two steps:
+
+1. In the pull request that changes the key, take it out of `mado.toml`. Say in
+   the changelog what a configuration carrying the old spelling has to do.
+1. After the release that carries the change is published, restore the key with
+   its new spelling. Step 4 of [Releasing](#releasing) is where the rest of the
+   after-the-release work lives, and this belongs in the same pull request.
+
+The action's `version` input met the same constraint from the other side: it
+defaults to the release it was published with, which does not exist yet at the
+moment of a version bump, so the job names the newest published release instead.
+
 ## Changelog
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
@@ -64,10 +90,12 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    leaves it behind runs the previous version's binary. CI checks that these
    agree with `Cargo.toml`, so forgetting one fails before the tag.
 1. Tag the merged commit `vx.y.z` and push the tag. That starts CD.
-1. Once CD has published the release, set `version` / `prev_version` in the
-   `justfile`, refresh the package manifests with `just update-homebrew`,
-   `just update-scoop`, `just update-winget` and `just update-flake`, and open a
-   pull request for them. Every one of these recipes downloads assets of the
+1. Once CD has published the release, restore anything
+   [a configuration change](#changing-a-configuration-keys-shape) had to take
+   out of `mado.toml`, set `version` / `prev_version` in the `justfile`, refresh
+   the package manifests with `just update-homebrew`, `just update-scoop`,
+   `just update-winget` and `just update-flake`, and open a pull request for
+   them. Every one of these recipes downloads assets of the
    release being packaged, so none of them can run any earlier. This is also why
    `flake.nix` and the manifests under `pkg/` still name the previous version at
    the moment the tag is pushed, and why `nix run github:akiomik/mado/vx.y.z`
