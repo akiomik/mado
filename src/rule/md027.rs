@@ -45,13 +45,13 @@ impl MD027 {
     /// item's to answer for rather than either quote's.
     ///
     /// A line that carries fewer markers than the quote stops being measured
-    /// there, and what follows the last marker it does carry is measured as that
-    /// marker's content: a lazy continuation line of `> - >  first` is
-    /// `  >    second`, and the four spaces are the quote's however few markers
-    /// follow them. A line carrying no marker at all is left alone, text that
-    /// happens to hold a `>` included. Spaces before the first marker are read as
-    /// the prefix they look like, however many; a tab there is not, which leaves a
-    /// quote a list item indents with one unmeasured on that line.
+    /// there, with what follows the last marker it carries measured as that
+    /// marker's content if the quote owns that marker: `> > Quoted` followed by
+    /// `>   lazy` is three spaces after the outer marker. A line carrying no
+    /// marker at all is left alone, text that happens to hold a `>` included.
+    /// Spaces before the first marker are read as the prefix they look like,
+    /// however many; a tab there is not, which leaves a quote a list item indents
+    /// with one unmeasured on that line.
     ///
     /// `None` for a line `lines` does not hold, and for one the `offset` is not
     /// within. The caller reports nothing for either.
@@ -77,7 +77,7 @@ impl MD027 {
             let spaces = rest.len() - at_marker.len();
 
             let Some(after_marker) = at_marker.strip_prefix('>') else {
-                if marker > 0 && spaces > 1 && !at_marker.is_empty() {
+                if marker + own_markers > markers && spaces > 1 && !at_marker.is_empty() {
                     positions.push(content_position(prefix_len + spaces + 1));
                 }
 
@@ -330,8 +330,8 @@ mod tests {
     #[test]
     fn check_errors_paragraph_in_list_item_with_nested_block_quote() -> Result<()> {
         let text = indoc! {"
-            > - >  Indented text
-              >    More indented
+            > -   >  Indented text
+            >     Not indented
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
@@ -339,10 +339,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
-        let expected = vec![
-            rule.to_violation(path.clone(), Sourcepos::from((1, 8, 1, 20))),
-            rule.to_violation(path, Sourcepos::from((2, 8, 2, 20))),
-        ];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 10, 1, 22)))];
         assert_eq!(actual, expected);
         Ok(())
     }
