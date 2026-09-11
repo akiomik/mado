@@ -1,4 +1,5 @@
 use core::num::NonZero;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::Component;
@@ -158,18 +159,32 @@ impl WalkParallelBuilder {
     /// path can have mado exclude a file a clone keeps.
     fn taken_back_over(
         pattern: &Path,
-        seen: &mut Vec<(PathBuf, Option<PathBuf>)>,
+        seen: &mut HashMap<PathBuf, Option<PathBuf>>,
     ) -> Option<PathBuf> {
-        let over = pattern.canonicalize().ok()?.parent()?.to_path_buf();
-        if let Some((_, found)) = seen.iter().find(|(dir, _)| *dir == over) {
+        let at = pattern.canonicalize().ok()?;
+
+        Self::takes_back_at_or_over(at.parent()?, seen)
+    }
+
+    /// `taken_back_over` for a directory. Every directory on the way up is
+    /// remembered, not just the one asked after, so directories sharing a
+    /// parent ask about what is over them once between them.
+    fn takes_back_at_or_over(
+        dir: &Path,
+        seen: &mut HashMap<PathBuf, Option<PathBuf>>,
+    ) -> Option<PathBuf> {
+        if let Some(found) = seen.get(dir) {
             return found.clone();
         }
 
-        let found = over
-            .ancestors()
-            .map(|at| at.join(".ignore"))
-            .find(|file| file.is_file() && Self::takes_something_back(file));
-        seen.push((over, found.clone()));
+        let file = dir.join(".ignore");
+        let found = if file.is_file() && Self::takes_something_back(&file) {
+            Some(file)
+        } else {
+            dir.parent()
+                .and_then(|over| Self::takes_back_at_or_over(over, seen))
+        };
+        seen.insert(dir.to_path_buf(), found.clone());
 
         found
     }
@@ -204,7 +219,7 @@ impl WalkParallelBuilder {
         above_is_repository: bool,
         respect_ignore: bool,
         respect_gitignore: bool,
-        seen: &mut Vec<(PathBuf, Option<Vec<PathBuf>>)>,
+        seen: &mut HashMap<PathBuf, Option<Vec<PathBuf>>>,
     ) -> Option<Vec<PathBuf>> {
         // The walk hands back a path that is not a directory without asking
         // any ignore file about it, so reading them for one cannot change what
@@ -220,9 +235,7 @@ impl WalkParallelBuilder {
         }
 
         let dir = Self::parent_of(pattern);
-        let files = if let Some((_, files)) = seen.iter().find(|(at, _)| *at == dir) {
-            files.clone()
-        } else {
+        let files = seen.get(&dir).cloned().unwrap_or_else(|| {
             let files = Self::ignore_files_of(
                 &dir,
                 current_dir,
@@ -230,9 +243,9 @@ impl WalkParallelBuilder {
                 respect_ignore,
                 respect_gitignore,
             );
-            seen.push((dir, files.clone()));
+            seen.insert(dir, files.clone());
             files
-        };
+        });
 
         files.as_ref()?;
         // A pattern that is a repository root is in one, whatever holds it.
@@ -394,10 +407,13 @@ impl WalkParallelBuilder {
             .ancestors()
             .skip(1)
             .any(Self::is_repository_root);
-        let mut seen = vec![];
-        let mut taken = vec![];
-        let mut explained = vec![];
+        let mut seen = HashMap::new();
+        let mut taken = HashMap::new();
+        let mut explained = HashSet::new();
+        // The groups keep the order the patterns arrived in, and `at_group`
+        // finds the one a pattern belongs to without walking them all.
         let mut groups: Vec<(Option<Vec<PathBuf>>, Vec<&PathBuf>)> = vec![];
+        let mut at_group: HashMap<Option<Vec<PathBuf>>, usize> = HashMap::new();
         for pattern in patterns {
             let mut files = Self::ignore_files_for(
                 pattern,
@@ -418,7 +434,7 @@ impl WalkParallelBuilder {
                     .flatten();
             if let Some(file) = taken_back {
                 files = None;
-                if !explained.contains(&file) {
+                if explained.insert(file.clone()) {
                     eprintln!(
                         "{}: takes a path back with a `!` line, which ranks over any .gitignore \
                          below it, and mado cannot arrange that without Git metadata, so \
@@ -426,7 +442,6 @@ impl WalkParallelBuilder {
                          every parent directory",
                         file.display()
                     );
-                    explained.push(file);
                 }
             }
 
@@ -435,9 +450,13 @@ impl WalkParallelBuilder {
             // matches it against paths built from the name a pattern was
             // written as. A group named `sub/../d1` cannot be handed the file
             // `./d1` walks by, so the two walk separately.
-            match groups.iter_mut().find(|(at, _)| *at == files) {
-                Some((_, members)) => members.push(pattern),
-                None => groups.push((files, vec![pattern])),
+            if let Some(&at) = at_group.get(&files)
+                && let Some((_, members)) = groups.get_mut(at)
+            {
+                members.push(pattern);
+            } else {
+                at_group.insert(files.clone(), groups.len());
+                groups.push((files, vec![pattern]));
             }
         }
 
@@ -493,6 +512,7 @@ mod tests {
     use alloc::sync::Arc;
     use miette::{Context as _, IntoDiagnostic as _};
     use std::{
+        collections::HashMap,
         env,
         ffi::OsStr,
         fs,
@@ -691,13 +711,14 @@ mod tests {
         write(&root.join("d1/two/a.md"), "# Fine\n")?;
 
         // Both names sit in `d1`, and what is over `d1` is over both of them.
-        let mut seen = vec![];
+        let mut seen = HashMap::new();
         let one = WalkParallelBuilder::taken_back_over(&root.join("d1/one"), &mut seen);
+        let asked = seen.len();
         let two = WalkParallelBuilder::taken_back_over(&root.join("d1/two"), &mut seen);
 
         assert!(one.is_some());
         assert_eq!(one, two);
-        assert_eq!(seen.len(), 1);
+        assert_eq!(seen.len(), asked);
 
         tmp_dir.close().into_diagnostic()
     }
