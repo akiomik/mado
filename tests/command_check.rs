@@ -142,6 +142,19 @@ fn check_reads_a_git_file_marker_as_a_repository() -> Result<()> {
 }
 
 #[test]
+fn check_reads_a_jj_directory_as_a_repository() -> Result<()> {
+    with_tree(IGNORED_BUILD_OUTPUT, |root| {
+        // The ignore crate stops at `.jj` as well as `.git`, so a Jujutsu
+        // repository is a repository for this setting too.
+        create_dir_all(root.join(".jj")).into_diagnostic()?;
+
+        let assert = check_in(root, &["."]).assert();
+        assert.success().stdout("All checks passed!\n");
+        Ok(())
+    })
+}
+
+#[test]
 fn check_reads_a_nested_gitignore_where_it_sits() -> Result<()> {
     with_tree(
         &[
@@ -175,6 +188,28 @@ fn check_reads_a_gitignore_above_the_tree_when_told_always() -> Result<()> {
             // Without a repository to stop at there is nothing to stop at:
             // `.gitignore` files apply however far above the tree they sit.
             // This is the `ignore` crate's rule, and `always` says so.
+            let assert = check_in(&proj, &["."]).assert();
+            assert.success().stdout("All checks passed!\n");
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn check_reads_a_gitignore_above_a_repository_when_told_always() -> Result<()> {
+    with_tree(
+        &[
+            (".gitignore", "generated.md\n"),
+            ("proj/generated.md", "#Hello."),
+        ],
+        |root| {
+            let proj = root.join("proj");
+            create_dir_all(proj.join(".git")).into_diagnostic()?;
+            policy(&proj, "always")?;
+
+            // `always` stops mado looking for a repository at all, so the
+            // boundary Git keeps at a repository root is not kept here either.
+            // This tree has one, and the file above it still applies.
             let assert = check_in(&proj, &["."]).assert();
             assert.success().stdout("All checks passed!\n");
             Ok(())
@@ -273,12 +308,14 @@ fn check_rejects_the_boolean_spelling_of_the_policy() -> Result<()> {
     with_tree(IGNORED_BUILD_OUTPUT, |root| {
         write(root.join("mado.toml"), "[lint]\nrespect-gitignore = true\n").into_diagnostic()?;
 
-        // 0.3.x wrote this as a boolean. Failing to parse is the migration
-        // notice: `true` would have to mean one of two things now.
+        // 0.3.x wrote this as a boolean. Failing to load is the migration
+        // notice, and it says which policy the boolean written meant rather
+        // than leaving that to be looked up.
         let output = check_in(root, &["."]).output().into_diagnostic()?;
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success());
         assert!(stderr.contains("respect-gitignore"), "{stderr}");
+        assert!(stderr.contains("repository-only"), "{stderr}");
         Ok(())
     })
 }

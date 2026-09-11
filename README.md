@@ -161,12 +161,17 @@ and [the JSON Schema for `mado.toml`](https://github.com/akiomik/mado/blob/main/
 | `"repository-only"` (default) | inside a Git repository, as Git does |
 | `"always"` | whether or not the tree carries Git metadata |
 
+A repository here is a `.git` directory, the `.git` file a worktree or a
+submodule carries, or a `.jj` directory, which the ignore crate stops at as
+well.
+
 `"always"` suits a tree that arrives without its Git metadata — a source
-archive, or a Docker context copied without `.git` — and comes on the
-[ignore](https://docs.rs/ignore) crate's terms, the same ones
-`rg --no-require-git` has: `.gitignore` files apply from every parent
-directory, and a repository below the path being linted does not bound the
-search.
+archive, or a Docker context copied without `.git`. It stops mado looking for a
+repository at all, for every tree rather than only those without one, which is
+what the [ignore](https://docs.rs/ignore) crate offers and what
+`rg --no-require-git` does. So `.gitignore` files apply from every parent
+directory, above a clone's own repository root included, and a repository below
+the path being linted does not bound the search.
 
 The global Git ignore file and `.git/info/exclude` are never read. Neither
 travels with the tree being linted, so reading them would have one source lint
