@@ -1,6 +1,5 @@
-use comrak::nodes::NodeValue;
+use comrak::nodes::{NodeValue, Sourcepos};
 use miette::Result;
-use rustc_hash::FxHashSet;
 
 use crate::{Document, violation::Violation};
 
@@ -23,6 +22,39 @@ impl MD027 {
     pub const fn new() -> Self {
         Self {}
     }
+
+    /// The content of line `lineno` from where it begins to the end of the line,
+    /// when more than one space separates it from the blockquote marker at
+    /// `marker_column`. One space after the marker belongs to the prefix, per
+    /// `CommonMark`, and the rest is what this rule reports.
+    ///
+    /// The line is read rather than the inlines on it, since an inline that
+    /// opened on an earlier line leaves the first inline of this one beginning
+    /// wherever that inline closed.
+    ///
+    /// `None` for a line with nothing to report, a line the marker cannot be
+    /// read at included: a lazy continuation line carries no marker, and a
+    /// nested quote's markers move between lines that spell the nesting with
+    /// different widths.
+    fn indented_content_position(
+        lines: &[String],
+        lineno: usize,
+        marker_column: usize,
+    ) -> Option<Sourcepos> {
+        let line = lines.get(lineno.checked_sub(1)?)?;
+        let after_marker = line
+            .get(marker_column.checked_sub(1)?..)?
+            .strip_prefix('>')?;
+        let content = after_marker.trim_start_matches(' ');
+        let spaces = after_marker.len() - content.len();
+
+        if spaces < 2 || content.trim().is_empty() {
+            return None;
+        }
+
+        let column = marker_column + spaces + 1;
+        Some(Sourcepos::from((lineno, column, lineno, line.len())))
+    }
 }
 
 impl RuleLike for MD027 {
@@ -41,22 +73,15 @@ impl RuleLike for MD027 {
             {
                 match &child_node.data.borrow().value {
                     NodeValue::Paragraph => {
-                        let mut lines = FxHashSet::default();
-                        for inline_node in child_node.children() {
-                            let block_quote_position = node.data.borrow().sourcepos;
-                            let inline_position = inline_node.data.borrow().sourcepos;
-                            let lineno = inline_position.start.line;
-                            let expected_column = block_quote_position.start.column + 2;
-
-                            if inline_position.start.column > expected_column
-                                && !lines.contains(&lineno)
+                        let marker_column = node.data.borrow().sourcepos.start.column;
+                        let paragraph_position = child_node.data.borrow().sourcepos;
+                        for lineno in paragraph_position.start.line..=paragraph_position.end.line {
+                            if let Some(position) =
+                                Self::indented_content_position(&doc.lines, lineno, marker_column)
                             {
-                                let violation =
-                                    self.to_violation(doc.path.clone(), inline_position);
+                                let violation = self.to_violation(doc.path.clone(), position);
                                 violations.push(violation);
                             }
-
-                            lines.insert(lineno);
                         }
                     }
                     NodeValue::List(_) => {
@@ -118,11 +143,46 @@ mod tests {
         let expected = vec![
             rule.to_violation(path.clone(), Sourcepos::from((1, 4, 1, 16))),
             rule.to_violation(path.clone(), Sourcepos::from((2, 4, 2, 16))),
-            rule.to_violation(path.clone(), Sourcepos::from((4, 4, 4, 9))),
-            rule.to_violation(path.clone(), Sourcepos::from((5, 4, 5, 13))),
-            rule.to_violation(path.clone(), Sourcepos::from((6, 4, 6, 9))),
-            rule.to_violation(path, Sourcepos::from((7, 4, 7, 30))),
+            rule.to_violation(path.clone(), Sourcepos::from((4, 4, 4, 18))),
+            rule.to_violation(path.clone(), Sourcepos::from((5, 4, 5, 22))),
+            rule.to_violation(path.clone(), Sourcepos::from((6, 4, 6, 18))),
+            rule.to_violation(path, Sourcepos::from((7, 4, 7, 39))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_paragraph_with_multiple_line_inline() -> Result<()> {
+        let text = indoc! {"
+            > **bold
+            >  span.** tail here
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 20)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_paragraph_with_indented_block_quote() -> Result<()> {
+        let text = indoc! {"
+            Text
+
+              >  Indented text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 6, 3, 18)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -276,6 +336,35 @@ mod tests {
             > **Strong** and text
             > `code` and text
             > [link](https://example.com) and text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: One space follows every marker here. The inline that spans both
+    // lines leaves the first inline of the second line beginning where it
+    // closed, which is not where the line's content begins.
+    #[test]
+    fn check_no_errors_paragraph_with_multiple_line_inline() -> Result<()> {
+        let text = indoc! {"
+            > **bold
+            > span.** tail here
+
+            > _em
+            > span._ tail here
+
+            > [link
+            > text](https://example.com) tail here
+
+            > `code
+            > span` tail here
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();

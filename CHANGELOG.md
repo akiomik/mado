@@ -43,6 +43,16 @@ parsed and therefore what gets reported.
   `config::lint::GitignorePolicy` rather than a `bool`, and
   `service::walker::WalkParallelBuilder::build` takes one (#436)
 
+### Fixed
+
+- MD027: measure a quoted paragraph's line from the line itself rather than from
+  the first inline reported on it, so a line whose content begins where an inline
+  that opened on the line before closed — `> **bold` followed by
+  `> span.** tail here` — is no longer reported when one space follows its
+  marker. A line that is reported now names the content after the marker through
+  to the end of the line, where it named the first inline on the line before
+  (#439)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added
