@@ -23,11 +23,11 @@ CI's coverage job. CI's Clippy job installs `g++` on a runner that has none.
 
 ## Changing a configuration key's shape
 
-`mado.toml` here is read by two mado binaries: the one built from the branch,
-and the newest published release, which the `Download` job in
-`.github/workflows/ci-action.yml` runs over this checkout through the action.
-That job is also the Markdown quality gate for this repository — nothing else
-lints these documents — so it cannot be pointed at a fixture instead.
+`mado.toml` here is read by two mado binaries. `cargo test` runs the one built
+from the branch over this repository, and the `Download` job in
+`.github/workflows/ci-action.yml` runs the newest published release over it,
+through the action and with the action's own default arguments. So the file has
+to be readable by the release before this one as well as by the branch.
 
 Adding a key is safe, and so is removing or renaming one: the release ignores
 keys it does not know and gives absent ones their defaults. What it cannot read
@@ -41,6 +41,9 @@ A change of that kind therefore lands in two steps:
    open an issue for putting it back. Nothing fails while the key is missing, so
    the second step has to be somewhere that is looked at rather than remembered.
    Say in the changelog what a configuration carrying the old spelling has to do.
+   Run `mado check .` here with the key out before you settle on this: the
+   repository lints with that key's default until it comes back, and for some of
+   them that is a very different set of files.
 1. After the release that carries the change is published, restore the key with
    its new spelling. Step 4 of [Releasing](#releasing) is where the rest of the
    after-the-release work lives, and this belongs in the same pull request.
