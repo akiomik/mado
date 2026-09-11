@@ -469,6 +469,23 @@ mod tests {
     }
 
     #[test]
+    fn gitignore_policy_names_the_values_it_takes() {
+        let unknown = toml::from_str::<Lint>("respect-gitignore = \"repo-only\"")
+            .err()
+            .map(|err| err.to_string())
+            .unwrap_or_default();
+        assert!(unknown.contains("repository-only"), "{unknown}");
+
+        // Anything that is neither a string nor the boolean 0.3.x wrote is
+        // answered by what the visitor says it expects.
+        let wrong_kind = toml::from_str::<Lint>("respect-gitignore = 1")
+            .err()
+            .map(|err| err.to_string())
+            .unwrap_or_default();
+        assert!(wrong_kind.contains("repository-only"), "{wrong_kind}");
+    }
+
+    #[test]
     fn gitignore_policy_says_what_a_boolean_meant() {
         let read = toml::from_str::<Lint>("respect-gitignore = true");
         let message = read.err().map(|err| err.to_string()).unwrap_or_default();
