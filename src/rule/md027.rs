@@ -54,6 +54,7 @@ impl MD027 {
         let line = lines.get(lineno.checked_sub(1)?)?;
         let mut rest = line.get(offset..)?;
         let mut prefix_len = offset;
+        let mut prefix_width = Self::expanded_width(line.get(..offset)?, 0);
         let mut positions = vec![];
         let content_position = |column| Sourcepos::from((lineno, column, lineno, line.len()));
 
@@ -67,13 +68,12 @@ impl MD027 {
             let owned = marker + own_markers > markers;
 
             // A marker takes one space of its own and three of indentation, per
-            // `CommonMark`, and a tab stands for four columns of the latter. Past
-            // that the `>` is text, and the spaces are the previous marker's
-            // content rather than indentation. Only a gap this quote answers for is
-            // held to it: one a list item indents is the item's, and as wide as the
-            // item is.
-            let columns = spaces + 3 * rest.get(..spaces)?.matches('\t').count();
-            let marker_here = at_marker.starts_with('>') && !(owned && columns > 4);
+            // `CommonMark`. Past that the `>` is text, and the spaces are the
+            // previous marker's content rather than indentation. Only a gap this
+            // quote answers for is held to it: one a list item indents is the
+            // item's, and as wide as the item is.
+            let width = Self::expanded_width(rest.get(..spaces)?, prefix_width);
+            let marker_here = at_marker.starts_with('>') && !(owned && width > 4);
 
             if !marker_here {
                 if owned && spaces > 1 && !at_marker.is_empty() {
@@ -89,6 +89,7 @@ impl MD027 {
 
             rest = at_marker.get(1..)?;
             prefix_len += spaces + 1;
+            prefix_width += width + 1;
         }
 
         let content = rest.trim_start_matches([' ', '\t']);
@@ -99,6 +100,21 @@ impl MD027 {
         }
 
         Some(positions)
+    }
+
+    /// How wide `text` is, written at column `from`, with each tab taking the
+    /// columns up to the next stop of four as `CommonMark` expands them.
+    fn expanded_width(text: &str, from: usize) -> usize {
+        text.chars().fold(0, |width, character| {
+            width
+                + if character == '\t' {
+                    // The columns up to the next stop, which is every fourth and
+                    // so is what the low two bits count off.
+                    4 - ((from + width) & 3)
+                } else {
+                    1
+                }
+        })
     }
 
     /// How many blockquotes `node`, itself a blockquote, is quoted by, itself
@@ -359,6 +375,28 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((2, 7, 2, 18)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: The tab on line 2 takes the two columns up to the next stop, which
+    // leaves the `>` after it within a marker's reach.
+    #[test]
+    fn check_errors_paragraph_with_tab_between_markers() -> Result<()> {
+        let text = indoc! {"
+            > > Quoted text
+            > \t>  More text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 4, 2, 15))),
+            rule.to_violation(path, Sourcepos::from((2, 7, 2, 15))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }
