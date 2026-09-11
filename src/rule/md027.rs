@@ -150,60 +150,65 @@ impl RuleLike for MD027 {
         let mut violations = vec![];
 
         for node in doc.ast.descendants() {
-            if node.data.borrow().value == NodeValue::BlockQuote
-                && let Some(child_node) = node.first_child()
-            {
-                match &child_node.data.borrow().value {
-                    NodeValue::Paragraph => {
-                        let block_quote_position = node.data.borrow().sourcepos;
-                        let paragraph_position = child_node.data.borrow().sourcepos;
-                        let depth = Self::block_quote_depth(node);
-                        let nested = Self::nested_block_quotes(node);
-                        for lineno in paragraph_position.start.line..=paragraph_position.end.line {
-                            // The quote's own marker on the line it starts at,
-                            // where comrak has already said which column it is at
-                            // and a list item's marker can precede it. Every line
-                            // after is read from its start, for the markers it
-                            // carries of the ones quoting it.
-                            let (markers, own_markers, offset) =
-                                if lineno == block_quote_position.start.line {
-                                    (1, 1, block_quote_position.start.column.saturating_sub(1))
-                                } else {
-                                    (depth, nested, 0)
-                                };
+            if node.data.borrow().value == NodeValue::BlockQuote {
+                let block_quote_position = node.data.borrow().sourcepos;
+                let expected_column = block_quote_position.start.column + 2;
+                let depth = Self::block_quote_depth(node);
+                let nested = Self::nested_block_quotes(node);
 
-                            let positions = Self::indented_content_positions(
-                                &doc.lines,
-                                lineno,
-                                markers,
-                                own_markers,
-                                offset,
-                            );
-                            for position in positions.into_iter().flatten() {
-                                let violation = self.to_violation(doc.path.clone(), position);
-                                violations.push(violation);
+                // Every block the quote holds, not only the first: a blank quoted
+                // line ends one and starts another, and the indentation of what
+                // follows is the quote's to answer for too.
+                for child_node in node.children() {
+                    match &child_node.data.borrow().value {
+                        NodeValue::Paragraph => {
+                            let paragraph_position = child_node.data.borrow().sourcepos;
+                            for lineno in
+                                paragraph_position.start.line..=paragraph_position.end.line
+                            {
+                                // The quote's own marker on the line it starts at,
+                                // where comrak has already said which column it is
+                                // at and a list item's marker can precede it. Every
+                                // line after is read from its start, for the markers
+                                // it carries of the ones quoting it.
+                                let (markers, own_markers, offset) =
+                                    if lineno == block_quote_position.start.line {
+                                        (1, 1, block_quote_position.start.column.saturating_sub(1))
+                                    } else {
+                                        (depth, nested, 0)
+                                    };
+
+                                let positions = Self::indented_content_positions(
+                                    &doc.lines,
+                                    lineno,
+                                    markers,
+                                    own_markers,
+                                    offset,
+                                );
+                                for position in positions.into_iter().flatten() {
+                                    let violation = self.to_violation(doc.path.clone(), position);
+                                    violations.push(violation);
+                                }
                             }
                         }
-                    }
-                    NodeValue::List(_) => {
-                        for item_node in child_node.children() {
-                            let block_quote_position = node.data.borrow().sourcepos;
-                            let item_position = item_node.data.borrow().sourcepos;
-                            let expected_column = block_quote_position.start.column + 2;
+                        NodeValue::List(_) => {
+                            for item_node in child_node.children() {
+                                let item_position = item_node.data.borrow().sourcepos;
 
-                            if item_position.start.column > expected_column {
-                                let violation = self.to_violation(doc.path.clone(), item_position);
-                                violations.push(violation);
+                                if item_position.start.column > expected_column {
+                                    let violation =
+                                        self.to_violation(doc.path.clone(), item_position);
+                                    violations.push(violation);
+                                }
                             }
                         }
-                    }
-                    _ => {
-                        // TODO: Support multi-line errors
-                        let parent_position = node.data.borrow().sourcepos;
-                        let child_position = child_node.data.borrow().sourcepos;
-                        if child_position.start.column > parent_position.start.column + 2 {
-                            let violation = self.to_violation(doc.path.clone(), child_position);
-                            violations.push(violation);
+                        _ => {
+                            // TODO: Support multi-line errors
+                            let child_position = child_node.data.borrow().sourcepos;
+                            if child_position.start.column > expected_column {
+                                let violation = self.to_violation(doc.path.clone(), child_position);
+                                violations.push(violation);
+                            }
                         }
                     }
                 }
@@ -401,6 +406,83 @@ mod tests {
         let expected = vec![
             rule.to_violation(path.clone(), Sourcepos::from((2, 4, 2, 15))),
             rule.to_violation(path, Sourcepos::from((2, 7, 2, 15))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_later_paragraph() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >
+            >  More quoted text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 4, 3, 19)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_later_list() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >
+            >  * Item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 4, 3, 9)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_later_code_block() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >
+            >  ```
+            >  foo
+            >  ```
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 4, 5, 6)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_later_block_quote() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >
+            >  >  More quoted text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((3, 4, 3, 22))),
+            rule.to_violation(path, Sourcepos::from((3, 7, 3, 22))),
         ];
         assert_eq!(actual, expected);
         Ok(())
@@ -672,6 +754,24 @@ mod tests {
         let text = indoc! {"
             > Quoted text
             \t>  More text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_later_paragraph() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >
+            > More quoted text
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();

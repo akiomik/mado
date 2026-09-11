@@ -62,6 +62,14 @@ parsed and therefore what gets reported.
   carries runs from the content after the marker to the end of the line, where it
   ran to the end of the first inline on it; no output format prints that, so it is
   for a library caller reading `Violation::position()` (#439)
+- MD027: measure every block a quote holds rather than its first alone, so what
+  follows a blank quoted line is measured too. `> Quoted text` above a `>` and a
+  `>  More quoted text` reports the third line, as it already did when that line
+  was the quote's first block, and a nested quote written there is reported for
+  the outer marker as well as the inner one. An indented code block written
+  anywhere but first is reported with them, the four spaces it needs on top of the
+  marker's own being more than one, which is #459 rather than anything this
+  release settles (#454)
 
 ## [0.3.2] - 2026-09-07
 
