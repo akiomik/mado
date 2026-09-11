@@ -53,9 +53,11 @@ impl MarkdownLintVisitor {
         })
     }
 
-    /// Report `message` unless it has been reported already. Only the walk's
-    /// own errors come here; an error about a file is reported every time,
-    /// since two files can fail with the same message.
+    /// Report `message` unless the same message has been reported already.
+    /// What the walk has to say names the file it is about -- an ignore file
+    /// it could not parse, a directory it could not read -- so only a true
+    /// repeat is dropped. An error from linting a file does not come here,
+    /// since two files can fail with the same words.
     fn say_once(&self, message: &str) {
         if self.unsaid(message) {
             eprintln!("{message}");
