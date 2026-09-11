@@ -51,7 +51,8 @@ impl MD027 {
     /// the prefix it looks like. A tab at the start of a line is not, which leaves
     /// a quote a list item indents with one unmeasured on that line.
     ///
-    /// `None` only for a line the `offset` is not within.
+    /// `None` for a line `lines` does not hold, and for one the `offset` is not
+    /// within. The caller reports nothing for either.
     fn indented_content_positions(
         lines: &[String],
         lineno: usize,
@@ -88,7 +89,7 @@ impl MD027 {
         let content = rest.trim_start_matches([' ', '\t']);
         let spaces = rest.len() - content.len();
 
-        if spaces > 1 && !content.trim().is_empty() {
+        if spaces > 1 && !content.is_empty() {
             let column = prefix_len + spaces + 1;
             positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
         }
@@ -263,6 +264,24 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((3, 6, 3, 18)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: A line of whitespace CommonMark does not end a line with is content,
+    // and the content of this one begins two spaces after the marker.
+    #[test]
+    fn check_errors_paragraph_with_unicode_whitespace() -> Result<()> {
+        let text = indoc! {"
+            >  \u{a0}
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 4, 1, 5)))];
         assert_eq!(actual, expected);
         Ok(())
     }
