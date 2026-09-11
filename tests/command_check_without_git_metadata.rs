@@ -14,12 +14,12 @@
 extern crate alloc;
 
 use alloc::collections::BTreeSet;
-use std::fs::{create_dir_all, remove_dir_all, remove_file, write};
+use std::fs::{create_dir_all, read_to_string, remove_dir_all, remove_file, write};
 use std::path::Path;
 
 use assert_cmd::Command;
 use assert_cmd::cargo_bin;
-use miette::{IntoDiagnostic as _, Result};
+use miette::{IntoDiagnostic as _, Result, miette};
 use tempfile::tempdir;
 
 /// Directories the trees are built out of.
@@ -158,10 +158,32 @@ fn reported(at: &Path, name: &str) -> Result<BTreeSet<String>> {
         .collect())
 }
 
+/// Fails where an `.ignore` above `root` takes a path back with a `!` line.
+/// mado reads every parent directory looking for one, so a file like that on
+/// the machine running the tests changes what these trees report, and the
+/// failure would be nothing to do with the tree under test.
+fn nothing_above_takes_a_path_back(root: &Path) -> Result<()> {
+    let at = root.canonicalize().into_diagnostic()?;
+    for over in at.ancestors().skip(1) {
+        let file = over.join(".ignore");
+        let takes_back =
+            read_to_string(&file).is_ok_and(|text| text.lines().any(|line| line.starts_with('!')));
+        if takes_back {
+            return Err(miette!(
+                "{} takes a path back, and these tests need no such file over them",
+                file.display()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 #[test]
 fn an_archive_reports_everything_a_clone_of_it_does() -> Result<()> {
     for (at, shape) in shapes().iter().enumerate() {
         let tmp_dir = tempdir().into_diagnostic()?;
+        nothing_above_takes_a_path_back(tmp_dir.path())?;
         let proj = tmp_dir.path().join("proj");
         write_tree(&proj, shape, at as u64)?;
 

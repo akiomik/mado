@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::fs::create_dir_all;
+use std::fs::read_to_string;
 use std::fs::write;
 use std::io::Write as _;
 #[cfg(unix)]
@@ -15,6 +16,7 @@ use mado::Config;
 use miette::Context as _;
 use miette::IntoDiagnostic as _;
 use miette::Result;
+use miette::miette;
 use tempfile::tempdir;
 
 fn with_tmp_file<F>(name: &str, content: &str, f: F) -> Result<()>
@@ -266,12 +268,34 @@ fn check_exclusion_default_target_with_dot_slash_prefix() -> Result<()> {
 
 /// Lays out a tree of files under a temporary directory. A path ending in `/`
 /// is created as an empty directory.
+/// Fails where an `.ignore` above `root` takes a path back with a `!` line.
+/// mado reads every parent directory looking for one, so a file like that on
+/// the machine running the tests changes what these trees report, and the
+/// failure would be nothing to do with the tree under test.
+fn nothing_above_takes_a_path_back(root: &Path) -> Result<()> {
+    let at = root.canonicalize().into_diagnostic()?;
+    for over in at.ancestors().skip(1) {
+        let file = over.join(".ignore");
+        let takes_back =
+            read_to_string(&file).is_ok_and(|text| text.lines().any(|line| line.starts_with('!')));
+        if takes_back {
+            return Err(miette!(
+                "{} takes a path back, and these tests need no such file over them",
+                file.display()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn with_tree<F>(entries: &[(&str, &str)], f: F) -> Result<()>
 where
     F: FnOnce(&Path) -> Result<()>,
 {
     let tmp_dir = tempdir().into_diagnostic()?;
     let root = tmp_dir.path();
+    nothing_above_takes_a_path_back(root)?;
     for (path, content) in entries {
         let path = root.join(path);
         if let Some(dir) = path.parent() {
