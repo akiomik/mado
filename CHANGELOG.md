@@ -13,6 +13,36 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `respect-gitignore` takes a policy rather than a boolean, since
+  there are three behaviours to name rather than two (#436):
+
+  | 0.3.x | 0.4.0 |
+  |---|---|
+  | `respect-gitignore = false` | `respect-gitignore = "never"` |
+  | `respect-gitignore = true` | `respect-gitignore = "repository-only"` |
+  | — | `respect-gitignore = "always"` |
+
+  `"repository-only"` is the default and is what a boolean `true` did:
+  `.gitignore` applies inside a repository, as Git does. Note the entry below,
+  which changes what a repository lints in every mode. `"always"` stops mado looking
+  for a repository at all, for every tree rather than only those without one, so
+  a source archive or a Docker context copied without `.git` lints the files a
+  clone of it does. It comes on the `ignore` crate's terms, the same ones
+  `rg --no-require-git` has: `.gitignore` files apply from every parent
+  directory, above a clone's own repository root included, and a repository
+  below the path being linted does not bound the search. The boolean spelling is
+  not accepted; a configuration that still carries it fails to load rather than
+  being guessed at
+- The global Git ignore file and `.git/info/exclude` are no longer read. mado
+  had been reading both by inheriting the walker's defaults; neither travels
+  with the tree being linted, so reading them had one source lint differently on
+  another machine (#436)
+- **Breaking:** `config::lint::Lint::respect_gitignore` is a
+  `config::lint::GitignorePolicy` rather than a `bool`, and
+  `service::walker::WalkParallelBuilder::build` takes one (#436)
+
 ## [0.3.2] - 2026-09-07
 
 ### Added

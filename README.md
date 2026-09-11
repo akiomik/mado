@@ -150,6 +150,33 @@ For more details,
 see [the example `mado.toml`](https://github.com/akiomik/mado/blob/main/mado.toml)
 and [the JSON Schema for `mado.toml`](https://github.com/akiomik/mado/blob/main/pkg/json-schema/mado.json).
 
+### Ignore files
+
+`respect-ignore` decides whether `.ignore` files exclude what they list.
+`respect-gitignore` decides when `.gitignore` files do:
+
+| value | `.gitignore` files are read |
+|---|---|
+| `"never"` | not at all |
+| `"repository-only"` (default) | inside a Git repository, as Git does |
+| `"always"` | whether or not the tree carries Git metadata |
+
+A repository here is a `.git` directory, the `.git` file a worktree or a
+submodule carries, or a `.jj` directory, which the ignore crate stops at as
+well.
+
+`"always"` suits a tree that arrives without its Git metadata — a source
+archive, or a Docker context copied without `.git`. It stops mado looking for a
+repository at all, for every tree rather than only those without one, which is
+what the [ignore](https://docs.rs/ignore) crate offers and what
+`rg --no-require-git` does. So `.gitignore` files apply from every parent
+directory, above a clone's own repository root included, and a repository below
+the path being linted does not bound the search.
+
+The global Git ignore file and `.git/info/exclude` are never read. Neither
+travels with the tree being linted, so reading them would have one source lint
+differently on another machine.
+
 ## GitHub Actions
 
 Mado is compatible with GitHub Actions.
