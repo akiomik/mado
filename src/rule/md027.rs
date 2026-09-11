@@ -44,10 +44,14 @@ impl MD027 {
     /// between two quotes indents the inner one, and that indentation is the
     /// item's to answer for rather than either quote's.
     ///
-    /// `None` for a line that does not carry `markers` markers after `offset`,
-    /// which is how a lazy continuation line is left alone. Text that happens to
-    /// hold a `>` is not a prefix, though indentation before one is read as the
-    /// prefix it looks like.
+    /// A line stops being measured where it stops carrying markers, with what it
+    /// carried of them measured: a lazy continuation line carries none, and text
+    /// that happens to hold a `>` is not a prefix. Spaces before one are, though,
+    /// so a line indented past what `CommonMark` allows before a marker is read as
+    /// the prefix it looks like. A tab at the start of a line is not, which leaves
+    /// a quote a list item indents with one unmeasured on that line.
+    ///
+    /// `None` only for a line the `offset` is not within.
     fn indented_content_positions(
         lines: &[String],
         lineno: usize,
@@ -61,7 +65,11 @@ impl MD027 {
         let mut positions = vec![];
 
         for marker in 0..markers {
-            let at_marker = rest.trim_start_matches([' ', '\t']);
+            let at_marker = if marker == 0 {
+                rest.trim_start_matches(' ')
+            } else {
+                rest.trim_start_matches([' ', '\t'])
+            };
             let spaces = rest.len() - at_marker.len();
 
             if marker + own_markers > markers && spaces > 1 {
@@ -69,7 +77,11 @@ impl MD027 {
                 positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
             }
 
-            rest = at_marker.strip_prefix('>')?;
+            let Some(after_marker) = at_marker.strip_prefix('>') else {
+                return Some(positions);
+            };
+
+            rest = after_marker;
             prefix_len += spaces + 1;
         }
 
@@ -119,19 +131,18 @@ impl RuleLike for MD027 {
                     NodeValue::Paragraph => {
                         let block_quote_position = node.data.borrow().sourcepos;
                         let paragraph_position = child_node.data.borrow().sourcepos;
+                        let depth = Self::block_quote_depth(node);
+                        let nested = Self::nested_block_quotes(node);
                         for lineno in paragraph_position.start.line..=paragraph_position.end.line {
-                            // The quote's own marker on the line it starts at, and
-                            // the whole prefix on every line after, where nothing
-                            // but the quote's markers can precede the content.
+                            // The quote's own marker on the line it starts at,
+                            // where comrak has already said which column it is at
+                            // and a list item's marker can precede it. Every line
+                            // after carries the prefix and is read from its start.
                             let (markers, own_markers, offset) =
                                 if lineno == block_quote_position.start.line {
                                     (1, 1, block_quote_position.start.column.saturating_sub(1))
                                 } else {
-                                    (
-                                        Self::block_quote_depth(node),
-                                        Self::nested_block_quotes(node),
-                                        0,
-                                    )
+                                    (depth, nested, 0)
                                 };
 
                             let positions = Self::indented_content_positions(
@@ -465,6 +476,23 @@ mod tests {
     }
 
     #[test]
+    fn check_errors_with_nested_block_quotes5() -> Result<()> {
+        let text = indoc! {"
+            > > Quoted text
+            >   More quoted text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 5, 2, 20)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
     fn check_no_errors_paragraph() -> Result<()> {
         let text = indoc! {"
             > Text
@@ -522,6 +550,25 @@ mod tests {
         let text = indoc! {"
             > > Quoted text
             ab>  more text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: A tab is four columns of indentation, more than `CommonMark` allows
+    // before a marker, so the `>` on line 2 is text.
+    #[test]
+    fn check_no_errors_paragraph_with_tab_indented_continuation() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            \t>  More text
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
