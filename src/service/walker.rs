@@ -305,7 +305,8 @@ impl WalkParallelBuilder {
                 // to go looking for. Without one it never looks up there, and
                 // this reading is the only one those files get. What it makes
                 // of a file at a root rather than over one it keeps to itself,
-                // here as on `main`.
+                // here as on `main`. It reads higher up than the boundary lets
+                // mado apply, and speaks about those files too -- see #441.
                 if let Some(err) = builder.add_ignore(file)
                     && !respect_gitignore
                     && !err.is_io()
