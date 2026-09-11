@@ -16,8 +16,8 @@ use miette::Result;
 use miette::miette;
 
 /// What the walker would spend on a walk of its own on a machine with `cores`.
-/// Its own default stops at twelve however many there are, and a walk mado
-/// sizes by hand would pass that without stopping there as well.
+/// Its own default stops at twelve; a walk mado sizes by hand would pass that
+/// without the same limit.
 fn budget_for(cores: usize) -> usize {
     cores.min(12)
 }
@@ -105,8 +105,8 @@ impl WalkParallelBuilder {
     /// its own boundary. `above_is_repository` answers for the directories
     /// over `current_dir`, which no pattern can reach by walking up.
     ///
-    /// Every name that gets here leads where it reads, so where each step
-    /// stands can be read off the name rather than asked after.
+    /// Every name that reaches this leads where it reads, so each step's place
+    /// can be read off the name without resolving it.
     fn ignore_files_of(
         dir: &Path,
         current_dir: &Path,
@@ -141,31 +141,21 @@ impl WalkParallelBuilder {
         Self::bounds_itself(dir)
     }
 
-    /// Whether `path` takes something back. A line that opens with a `!` in an
-    /// ignore file undoes what an earlier one said, and the walker ranks an
-    /// `.ignore` over every `.gitignore` wherever the two sit, which nothing
-    /// mado can hand a file back through will do.
+    /// Whether `path` has a line starting with `!`, which keeps a path an
+    /// earlier line excluded. A `!` meant literally is escaped with a
+    /// backslash, so it cannot start a line.
     fn takes_something_back(path: &Path) -> bool {
-        // A `!` opens a line that takes back; one written for itself is
-        // escaped, and so opens with a backslash.
         fs::read_to_string(path).is_ok_and(|text| text.lines().any(|line| line.starts_with('!')))
     }
 
-    /// Whether an `.ignore` over `pattern` takes something back that a
-    /// `.gitignore` under it could be excluding. Reading these files for
-    /// `pattern` -- or leaving them unread, which comes to the same -- puts
-    /// them under every file the walk finds for itself, so the walk would drop
-    /// what it should keep, quietly, and where a clone of the same tree keeps
-    /// it. The walker's own arrangement is left to answer instead, which keeps
-    /// what it should and reports more besides.
+    /// The nearest `.ignore` over `pattern` with a `!` line, if there is one.
+    /// `seen` remembers the answer for the directory `pattern` sits in.
     ///
-    /// The whole way up is asked, not the part mado hands back: the walker
-    /// reads an `.ignore` however far over the tree it sits, so one that far
-    /// over ranks over a `.gitignore` in it just the same.
-    ///
-    /// The answer belongs to the directory `pattern` sits in, so `seen`
-    /// remembers it: a command naming every directory in one place asks the
-    /// same question once per name.
+    /// Every parent is asked, not only the ones mado hands back. The walker
+    /// reads `.ignore` files from all of them and ranks them over every
+    /// `.gitignore`; `add_ignore` cannot, since it puts a file below
+    /// everything the walk finds for itself. So a `!` line anywhere over the
+    /// path can have mado exclude a file a clone keeps.
     fn taken_back_over(
         pattern: &Path,
         seen: &mut Vec<(PathBuf, Option<PathBuf>)>,
@@ -417,15 +407,11 @@ impl WalkParallelBuilder {
                 respect_gitignore,
                 &mut seen,
             );
-            // Whatever mado hands back ends up under what the walk finds for
-            // itself, and one of the files over this one taking something back
-            // is one the walk would then drop. The walker's own arrangement is
-            // left to answer instead, which keeps what it should and reports
-            // more besides. There is nothing to arrange where the walker finds
-            // the files itself, which is what `None` says, nor where `.ignore`
-            // files go unread and nothing stands over the walk's own answers,
-            // nor for a path that is not a directory, which the walk hands back
-            // without asking any ignore file about it.
+            // A `!` line over the path would outrank a `.gitignore` under it
+            // in a clone and not here, so mado hands nothing back and lets the
+            // walker arrange it: that reports more and drops nothing. Only
+            // where mado had files to hand back (`Some`), the path is a
+            // directory, and `.ignore` files are read at all.
             let taken_back =
                 (files.is_some() && pattern.is_dir() && respect_ignore && respect_gitignore)
                     .then(|| Self::taken_back_over(pattern, &mut taken))

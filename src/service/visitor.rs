@@ -34,9 +34,9 @@ impl MarkdownLintVisitor {
         }
     }
 
-    /// This visitor, sharing `said` as the note of what the walks have said
-    /// about themselves. A tree is walked a group at a time, and an ignore
-    /// file several groups read has as much to say to each of them.
+    /// This visitor, sharing `said` as the note of what has been reported. A
+    /// tree is walked a group at a time, and without the note an ignore file
+    /// several groups read reports its errors once per group.
     #[inline]
     #[must_use]
     pub fn saying_each_thing_once(mut self, said: Arc<Mutex<HashSet<String>>>) -> Self {
@@ -44,9 +44,8 @@ impl MarkdownLintVisitor {
         self
     }
 
-    /// Whether `message` is yet to be said. A note that cannot be read leaves
-    /// it said again rather than unsaid: saying a thing twice is the smaller
-    /// fault of the two.
+    /// Whether `message` has yet to be reported. An unreadable note reports
+    /// again rather than staying silent.
     fn unsaid(&self, message: &str) -> bool {
         self.said.as_ref().is_none_or(|said| {
             said.lock()
@@ -54,8 +53,9 @@ impl MarkdownLintVisitor {
         })
     }
 
-    /// Say what the walk has to say about itself, unless it has been said
-    /// already. What a file has to say is its own and is said either way.
+    /// Report `message` unless it has been reported already. Only the walk's
+    /// own errors come here; an error about a file is reported every time,
+    /// since two files can fail with the same message.
     fn say_once(&self, message: &str) {
         if self.unsaid(message) {
             eprintln!("{message}");
@@ -95,8 +95,8 @@ impl ParallelVisitor for MarkdownLintVisitor {
     fn visit(&mut self, either_entry: Result<DirEntry, Error>) -> WalkState {
         // TODO: Handle errors
         match either_entry {
-            // The walk speaks here of the files it read to walk by, which are
-            // one file's worth of trouble however many walks read them.
+            // Errors about the ignore files the walk read: one broken file is
+            // one error, however many walks read it.
             Err(err) => self.say_once(&err.to_string()),
             Ok(entry) => {
                 if let Err(err) = self.visit_inner(&entry) {

@@ -71,12 +71,10 @@ impl ParallelLintRunner {
             }
         });
 
-        // Each walk holds its visitor for as long as it runs, so the groups
-        // run in batches of as many as the machine has to give, one visitor
-        // apiece, rather than one after another.
-        // One walk at a time at the very least, whatever the count came out as:
-        // a batch of none would leave the loop turning without moving, and a
-        // walk the batch has no visitor for would go unwalked without a word.
+        // Each walk holds its visitor while it runs, so a batch gets one
+        // visitor apiece and the batches run one after another. At least one
+        // walk per batch: a batch of none would loop without ever moving on,
+        // and a walk with no visitor would not be walked at all.
         let at_once = walks_at_once(thread_budget(), self.walkers.len()).max(1);
         let mut remaining = self.walkers;
         // A clone of the factory keeps the note of what has been said, so a
