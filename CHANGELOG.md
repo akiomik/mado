@@ -46,12 +46,14 @@ parsed and therefore what gets reported.
 ### Fixed
 
 - MD027: measure a quoted paragraph's line from the line itself rather than from
-  the first inline reported on it, so a line whose content begins where an inline
-  that opened on the line before closed — `> **bold` followed by
-  `> span.** tail here` — is no longer reported when one space follows its
-  marker. A line that is reported now names the content after the marker through
-  to the end of the line, where it named the first inline on the line before
-  (#439)
+  the first inline reported on it, which an inline spanning two lines leaves
+  beginning where it closed rather than where the line's content does. Reports
+  move in both directions: `> **bold` followed by `> span.** tail here` was
+  reported at the text after the strong and is not any more, one space following
+  both markers, while `> **bold` followed by `>  span**` went unreported and now
+  is, the two spaces after its marker having gone unread. A reported line names
+  the content after the marker through to the end of the line, where it named the
+  first inline on the line (#439)
 
 ## [0.3.2] - 2026-09-07
 
