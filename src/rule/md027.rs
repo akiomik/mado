@@ -44,12 +44,14 @@ impl MD027 {
     /// between two quotes indents the inner one, and that indentation is the
     /// item's to answer for rather than either quote's.
     ///
-    /// A line stops being measured where it stops carrying markers, with what it
-    /// carried of them measured: a lazy continuation line carries none, and text
-    /// that happens to hold a `>` is not a prefix. Spaces before one are, though,
-    /// so a line indented past what `CommonMark` allows before a marker is read as
-    /// the prefix it looks like. A tab at the start of a line is not, which leaves
-    /// a quote a list item indents with one unmeasured on that line.
+    /// A line that carries fewer markers than the quote stops being measured
+    /// there, and what follows the last marker it does carry is measured as that
+    /// marker's content: a lazy continuation line of `> - >  first` is
+    /// `  >    second`, and the four spaces are the quote's however few markers
+    /// follow them. A line carrying no marker at all is left alone, text that
+    /// happens to hold a `>` included. Spaces before the first marker are read as
+    /// the prefix they look like, however many; a tab there is not, which leaves a
+    /// quote a list item indents with one unmeasured on that line.
     ///
     /// `None` for a line `lines` does not hold, and for one the `offset` is not
     /// within. The caller reports nothing for either.
@@ -64,6 +66,7 @@ impl MD027 {
         let mut rest = line.get(offset..)?;
         let mut prefix_len = offset;
         let mut positions = vec![];
+        let content_position = |column| Sourcepos::from((lineno, column, lineno, line.len()));
 
         for marker in 0..markers {
             let at_marker = if marker == 0 {
@@ -73,14 +76,17 @@ impl MD027 {
             };
             let spaces = rest.len() - at_marker.len();
 
-            if marker + own_markers > markers && spaces > 1 {
-                let column = prefix_len + spaces + 1;
-                positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
-            }
-
             let Some(after_marker) = at_marker.strip_prefix('>') else {
+                if marker > 0 && spaces > 1 && !at_marker.is_empty() {
+                    positions.push(content_position(prefix_len + spaces + 1));
+                }
+
                 return Some(positions);
             };
+
+            if marker + own_markers > markers && spaces > 1 {
+                positions.push(content_position(prefix_len + spaces + 1));
+            }
 
             rest = after_marker;
             prefix_len += spaces + 1;
@@ -90,8 +96,7 @@ impl MD027 {
         let spaces = rest.len() - content.len();
 
         if spaces > 1 && !content.is_empty() {
-            let column = prefix_len + spaces + 1;
-            positions.push(Sourcepos::from((lineno, column, lineno, line.len())));
+            positions.push(content_position(prefix_len + spaces + 1));
         }
 
         Some(positions)
@@ -318,6 +323,26 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((1, 4, 1, 16)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_paragraph_in_list_item_with_nested_block_quote() -> Result<()> {
+        let text = indoc! {"
+            > - >  Indented text
+              >    More indented
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 8, 1, 20))),
+            rule.to_violation(path, Sourcepos::from((2, 8, 2, 20))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }

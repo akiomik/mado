@@ -54,8 +54,10 @@ parsed and therefore what gets reported.
   is, the two spaces after its marker having gone unread. A line below the one a
   nested quote starts at is measured at each of that quote's own markers rather
   than at the innermost alone, so `>  >  >  text` written there is reported once
-  per marker. A reported line names the content after the marker through to the
-  end of the line, where it named the first inline on the line (#439)
+  per marker, and a line carrying no marker at all is left alone rather than
+  measured at the first inline on it. A reported line names the content after the
+  marker through to the end of the line, where it named the first inline on the
+  line (#439)
 
 ## [0.3.2] - 2026-09-07
 
