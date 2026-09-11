@@ -37,8 +37,10 @@ before it lints anything.
 
 A change of that kind therefore lands in two steps:
 
-1. In the pull request that changes the key, take it out of `mado.toml`. Say in
-   the changelog what a configuration carrying the old spelling has to do.
+1. In the pull request that changes the key, take it out of `mado.toml`, and
+   open an issue for putting it back. Nothing fails while the key is missing, so
+   the second step has to be somewhere that is looked at rather than remembered.
+   Say in the changelog what a configuration carrying the old spelling has to do.
 1. After the release that carries the change is published, restore the key with
    its new spelling. Step 4 of [Releasing](#releasing) is where the rest of the
    after-the-release work lives, and this belongs in the same pull request.
