@@ -74,7 +74,10 @@ parsed and therefore what gets reported.
   block carries names the line it starts at rather than every line it spans. An
   indented code block written anywhere but first is reported with the rest, the
   four spaces it needs on top of the marker's own being more than one, which is
-  #459 rather than anything this release settles (#454)
+  #459 rather than anything this release settles. Such a block is reported at the
+  first character after its spaces rather than at the column the block's content
+  begins, which moves the column right when it is written with more spaces than
+  the four it needs (#454)
 
 ## [0.3.2] - 2026-09-07
 

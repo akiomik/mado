@@ -572,6 +572,24 @@ mod tests {
         Ok(())
     }
 
+    // NOTE: The four spaces after the marker's own are what make this a code
+    // block, so the report cannot be acted on. #459 is whether to make it.
+    #[test]
+    fn check_errors_indented_code_block() -> Result<()> {
+        let text = indoc! {"
+            >      code block
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 8, 1, 17)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     #[test]
     fn check_errors_html_block_single_line() -> Result<()> {
         let text = indoc! {"
