@@ -62,6 +62,24 @@ parsed and therefore what gets reported.
   carries runs from the content after the marker to the end of the line, where it
   ran to the end of the first inline on it; no output format prints that, so it is
   for a library caller reading `Violation::position()` (#439)
+- MD027: measure every block a quote holds rather than its first alone, so what
+  follows a blank quoted line is measured too. `> Quoted text` above a `>` and a
+  `>  More quoted text` reports the third line, as it already did when that line
+  was the quote's first block, and a nested quote written there is reported for
+  the outer marker as well as the inner one. Each block is read on the line it
+  starts at rather than against the column the quote's first line put its marker
+  at, so a block whose marker is indented within what CommonMark allows is not
+  reported for that indentation, one whose marker sits further left than the
+  quote's first is reported for the spaces after it, and the position a reported
+  block carries names the line it starts at rather than every line it spans. An
+  indented code block written anywhere but first is reported with the rest, the
+  four spaces it needs on top of the marker's own being more than one, which is
+  #459 rather than anything this release settles. Such a block is reported at the
+  first character after its spaces rather than at the column the block's content
+  begins, which moves the column right when it is written with more spaces than
+  the four it needs. A lazily continued line of a block after the first is
+  measured as well, which is how the misread #455 describes reaches documents it
+  did not before (#454)
 
 ## [0.3.2] - 2026-09-07
 
