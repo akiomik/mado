@@ -77,7 +77,9 @@ parsed and therefore what gets reported.
   #459 rather than anything this release settles. Such a block is reported at the
   first character after its spaces rather than at the column the block's content
   begins, which moves the column right when it is written with more spaces than
-  the four it needs (#454)
+  the four it needs. A lazily continued line is measured for the first time as
+  well, which is how the misread #455 describes reaches documents it did not
+  before (#454)
 
 ## [0.3.2] - 2026-09-07
 

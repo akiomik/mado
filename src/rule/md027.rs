@@ -187,9 +187,11 @@ impl RuleLike for MD027 {
                     }
                 };
 
-                // Every block the quote holds, not only the first: a blank quoted
-                // line ends one and starts another, and the indentation of what
-                // follows is the quote's to answer for too.
+                // Every block comrak gives the quote a node for, not only the
+                // first: a blank quoted line ends one and starts another, and the
+                // indentation of what follows is the quote's to answer for too.
+                // A link reference definition is left no node and so unmeasured,
+                // which is #461.
                 for child_node in node.children() {
                     let child_position = child_node.data.borrow().sourcepos;
 
@@ -200,6 +202,7 @@ impl RuleLike for MD027 {
                             }
                         }
                         NodeValue::List(_) => {
+                            // TODO: Support multi-line errors
                             for item_node in child_node.children() {
                                 let lineno = item_node.data.borrow().sourcepos.start.line;
                                 self.measure(doc, lineno, prefix(lineno), &mut violations);
