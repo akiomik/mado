@@ -209,7 +209,9 @@ impl RuleLike for MD027 {
                             }
                         }
                         _ => {
-                            // TODO: Support multi-line errors
+                            // TODO: Support multi-line errors. A nested quote's
+                            // later lines are its own to measure, and measuring
+                            // them here as well would report them twice.
                             let lineno = child_position.start.line;
                             self.measure(doc, lineno, prefix(lineno), &mut violations);
                         }
@@ -523,6 +525,47 @@ mod tests {
         let rule = MD027::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((3, 4, 3, 14)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_later_block_quote_without_blank_line() -> Result<()> {
+        let text = indoc! {"
+            > Quoted text
+            >  > More text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 14)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // NOTE: The outer quote's later block is measured before the walk reaches the
+    // quotes inside the item, so line 2 is reported before line 1. #462 asks
+    // whether a rule owes its caller source order.
+    #[test]
+    fn check_errors_later_block_quote_in_list_item() -> Result<()> {
+        let text = indoc! {"
+            > - > >  Quoted text
+              >  >  More text
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD027::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 6, 2, 17))),
+            rule.to_violation(path.clone(), Sourcepos::from((1, 10, 1, 20))),
+            rule.to_violation(path, Sourcepos::from((2, 9, 2, 17))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }
