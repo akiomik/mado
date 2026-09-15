@@ -7,7 +7,7 @@ edition = "2024"
 # The fuzz target hands a `comrak::Arena` to `mado::Document`, so both packages
 # have to build the same comrak.
 [workspace.dependencies]
-comrak = "0.54"
+comrak = "0.55"
 
 [package]
 name = "mado"
