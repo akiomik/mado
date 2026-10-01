@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use comrak::nodes::{AstNode, NodeValue, Sourcepos};
+use comrak::nodes::{AstNode, NodeValue};
 use miette::Result;
 use rustc_hash::FxHashMap;
 
@@ -31,35 +31,35 @@ impl MD005 {
         root: &'a AstNode<'a>,
         path: &PathBuf,
         violations: &mut Vec<Violation>,
-        levels: &mut FxHashMap<usize, Sourcepos>,
+        levels: &mut FxHashMap<usize, usize>,
         level: usize,
+        content_column: usize,
     ) {
         for node in root.children() {
             if let NodeValue::List(_) = node.data.borrow().value {
                 for item_node in node.children() {
-                    if let NodeValue::Item(_) = item_node.data.borrow().value {
-                        let position = item_node.data.borrow().sourcepos;
-                        match levels.get(&level) {
-                            Some(expected_position) => {
-                                if position.start.column != expected_position.start.column {
-                                    let violation = self.to_violation(path.clone(), position);
-                                    violations.push(violation);
-                                }
-                            }
-                            None => {
-                                levels.insert(level, position);
-                            }
+                    if let NodeValue::Item(item) = item_node.data.borrow().value {
+                        let column = content_column + item.marker_offset;
+                        if column != *levels.entry(level).or_insert(column) {
+                            let position = item_node.data.borrow().sourcepos;
+                            let violation = self.to_violation(path.clone(), position);
+                            violations.push(violation);
                         }
 
-                        self.check_recursive(item_node, path, violations, levels, level + 1);
+                        let item_content_column = column + item.padding;
+                        self.check_recursive(
+                            item_node,
+                            path,
+                            violations,
+                            levels,
+                            level + 1,
+                            item_content_column,
+                        );
                     }
                 }
             } else {
-                // Lists inside a blockquote (or any other non-item container) are
-                // checked too, but against their own baseline: `levels` records
-                // absolute columns, and every line inside a blockquote is shifted
-                // by the `> ` prefix. Sharing the outer map would make a correctly
-                // indented quoted list look inconsistent with an unquoted one.
+                // Lists below this node are checked too, against their own
+                // baseline; see #486.
                 //
                 // NOTE: markdownlint reports nothing inside a blockquote here. It
                 // measures indentation from the raw line, so `>   * Foo` counts as
@@ -67,7 +67,7 @@ impl MD005 {
                 // side effect of how it measures rather than a decision about what
                 // MD005 means, so the deviation is deliberate on our side.
                 let mut scoped_levels = FxHashMap::default();
-                self.check_recursive(node, path, violations, &mut scoped_levels, level);
+                self.check_recursive(node, path, violations, &mut scoped_levels, level, 0);
             }
         }
     }
@@ -82,9 +82,9 @@ impl RuleLike for MD005 {
     #[inline]
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
-        let mut levels: FxHashMap<usize, Sourcepos> = FxHashMap::default();
+        let mut levels: FxHashMap<usize, usize> = FxHashMap::default();
 
-        self.check_recursive(doc.ast, &doc.path, &mut violations, &mut levels, 0);
+        self.check_recursive(doc.ast, &doc.path, &mut violations, &mut levels, 0, 0);
 
         Ok(violations)
     }
@@ -94,7 +94,7 @@ impl RuleLike for MD005 {
 mod tests {
     use std::path::Path;
 
-    use comrak::Arena;
+    use comrak::{Arena, nodes::Sourcepos};
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 
@@ -210,8 +210,6 @@ mod tests {
         Ok(())
     }
 
-    // A blockquote shifts every line by its prefix, so quoted items must not be
-    // compared against unquoted ones at the same nesting depth.
     #[test]
     fn check_no_errors_for_blockquote_alongside_top_level_list() -> Result<()> {
         let text = indoc! {"
@@ -263,6 +261,159 @@ mod tests {
             * List 2
                 1. item 3
                 2. item 4
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_tab_indented_sibling() -> Result<()> {
+        let text = indoc! {"
+            * a
+                * b
+            \t* c
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_tab_indentation() -> Result<()> {
+        let text = indoc! {"
+            * a
+              * b
+
+            text
+
+            * c
+             \t* d
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((7, 3, 7, 5)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_blockquote_marker_spacing() -> Result<()> {
+        let text = indoc! {"
+            > * a
+            >* b
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_tab_after_blockquote_marker() -> Result<()> {
+        let text = indoc! {"
+            >\t* a
+            > * b
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 3, 2, 5)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_bom() -> Result<()> {
+        let text = indoc! {"
+            \u{feff}* a
+            * b
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_for_blockquote_with_own_baseline() -> Result<()> {
+        let text = indoc! {"
+            * a
+            * b
+
+            >  * c
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_in_deep_nesting() -> Result<()> {
+        let text = indoc! {"
+            * a
+              * b
+                * c
+            * d
+               * e
+                 * f
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((5, 4, 6, 8))),
+            rule.to_violation(path, Sourcepos::from((6, 6, 6, 8))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_tab_after_marker() -> Result<()> {
+        let text = indoc! {"
+            *\ta
+            \t* b
+            * c
+                * d
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
