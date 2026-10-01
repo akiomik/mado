@@ -66,6 +66,12 @@ parsed and therefore what gets reported.
   them. This is the report a reversed link `(text)[http://www.example.com/]`
   used to raise, and mado has no rule of its own for that typo, so it now goes
   unreported (#418)
+- **Breaking:** MD007 no longer compares a bullet with the item above it: a
+  bullet whose list is directly in another item is compared with that item,
+  and any other bullet is checked on its own. When measuring indentation, a
+  tab counts to the next tab stop rather than as one column. Results change in
+  both directions. With the default `indent`, for example, `* a` followed by
+  `\t* b` is no longer reported, while `>\t* a` now is (#479)
 
 ### Fixed
 
