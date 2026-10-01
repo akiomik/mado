@@ -8,11 +8,11 @@ use super::{Metadata, RuleLike, Tag};
 
 /// Unordered list indentation.
 ///
-/// A nested bullet passes when its parent item's `padding` plus its own
-/// `marker_offset` is `indent`, and a top-level bullet when its `marker_offset`
-/// is 0 or `indent`. Both are comrak's, in columns with tabs expanded:
-/// `marker_offset` from the start of the container's content, and `padding`
-/// from the item's own marker.
+/// A bullet whose list is directly in an item passes when that item's `padding`
+/// plus the bullet's `marker_offset` is `indent`. Any other bullet passes when
+/// its `marker_offset` is 0 or `indent`. Both are comrak's, in columns with
+/// tabs expanded: `marker_offset` from the start of the container's content,
+/// and `padding` from the item's own marker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD007 {
@@ -291,6 +291,7 @@ mod tests {
             (" * a\n", 4, &[(1, 2)]),
             ("  * a\n", 2, &[]),
             (" 1. a\n   * b\n", 2, &[(2, 4)]),
+            (" 1. a\n  * b\n", 2, &[]),
             // Blockquotes
             (
                 "> * a\n>     * b\n>         * c\n>         * d\n>     * e\n",
