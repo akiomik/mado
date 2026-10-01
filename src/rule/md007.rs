@@ -1,4 +1,5 @@
-use comrak::nodes::{ListType, NodeValue, Sourcepos};
+use comrak::arena_tree::Node;
+use comrak::nodes::{ListType, NodeValue};
 use miette::Result;
 
 use crate::{Document, violation::Violation};
@@ -26,34 +27,6 @@ impl MD007 {
     pub const fn new(indent: usize) -> Self {
         Self { indent }
     }
-
-    /// Indentation of a list item relative to the blockquote that contains it, i.e.
-    /// 0 for the `*` in `> * Foo` and 2 for the one in `>   * Foo`.
-    ///
-    /// `sourcepos` columns are absolute, so they count the `> ` prefix as
-    /// indentation. Measuring from the last `>` on the line instead is what keeps a
-    /// correctly indented quoted list from being reported. One space or tab after
-    /// the marker belongs to the prefix rather than to the indentation, per
-    /// `CommonMark`, so it is dropped.
-    ///
-    /// `None` means the line could not be read back, and the caller then skips the
-    /// item: a position we cannot measure is not evidence of a violation. No input
-    /// is known to produce it, since a list item inside a blockquote always carries
-    /// a `>` on its own start line, but the lookup stays checked rather than
-    /// relying on that.
-    fn blockquote_indent(lines: &[String], position: Sourcepos) -> Option<usize> {
-        let indent = position.start.column.checked_sub(1)?;
-        let line = lines.get(position.start.line.checked_sub(1)?)?;
-        let prefix = line.get(..indent)?;
-        let marker = prefix.rfind('>')?;
-        let remainder = prefix.get(marker + 1..)?;
-        Some(
-            remainder
-                .strip_prefix([' ', '\t'])
-                .unwrap_or(remainder)
-                .len(),
-        )
-    }
 }
 
 impl Default for MD007 {
@@ -74,42 +47,29 @@ impl RuleLike for MD007 {
     #[inline]
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
-        let mut maybe_prev_indent = None;
 
         for node in doc.ast.descendants() {
-            if let NodeValue::Item(item) = node.data.borrow().value {
-                let position = node.data.borrow().sourcepos;
-                let mut maybe_indent = position.start.column.checked_sub(1);
+            let data = node.data.borrow();
+            if let NodeValue::Item(item) = data.value
+                && item.list_type == ListType::Bullet
+            {
+                let maybe_parent_padding =
+                    node.parent().and_then(Node::parent).and_then(|parent| {
+                        match parent.data.borrow().value {
+                            NodeValue::Item(parent_item) => Some(parent_item.padding),
+                            _ => None,
+                        }
+                    });
 
-                let mut maybe_ancestor = node.parent();
-                while let Some(ancestor) = maybe_ancestor {
-                    if ancestor.data.borrow().value == NodeValue::BlockQuote {
-                        maybe_indent = Self::blockquote_indent(&doc.lines, position);
-                        break;
-                    }
-                    maybe_ancestor = ancestor.parent();
+                let is_misindented = maybe_parent_padding.map_or(
+                    item.marker_offset != 0 && item.marker_offset != self.indent,
+                    |padding| padding + item.marker_offset != self.indent,
+                );
+
+                if is_misindented {
+                    let violation = self.to_violation(doc.path.clone(), data.sourcepos);
+                    violations.push(violation);
                 }
-
-                // An item whose indentation cannot be measured is skipped entirely,
-                // leaving `maybe_prev_indent` untouched so the next item is compared
-                // against the last position we could actually read.
-                let Some(indent) = maybe_indent else {
-                    continue;
-                };
-
-                if item.list_type == ListType::Bullet {
-                    let level_indent = match maybe_prev_indent {
-                        Some(prev_indent) if indent > prev_indent => indent - prev_indent,
-                        _ => indent,
-                    };
-
-                    if level_indent != 0 && level_indent != self.indent {
-                        let violation = self.to_violation(doc.path.clone(), position);
-                        violations.push(violation);
-                    }
-                }
-
-                maybe_prev_indent = Some(indent);
             }
         }
 
@@ -177,7 +137,7 @@ mod tests {
         Ok(())
     }
 
-    // TODO: This should be passed
+    // See #481.
     // #[test]
     // fn check_errors_with_ol() -> Result<()> {
     //     let text = indoc! {"
@@ -248,7 +208,6 @@ mod tests {
             * List
             > * List in blockquote
             >* List in blockquote
-            >\t* List in blockquote
         "}
         .to_owned();
         let path = Path::new("test.md").to_path_buf();
@@ -295,47 +254,297 @@ mod tests {
         Ok(())
     }
 
-    // `blockquote_indent` returns `None` only for positions that `check` cannot
-    // produce, so those arms are exercised directly.
     #[test]
-    fn blockquote_indent_measures_from_the_last_marker() {
-        let lines = vec![">   * Foo".to_owned()];
-        let position = Sourcepos::from((1, 5, 1, 9));
-        assert_eq!(MD007::blockquote_indent(&lines, position), Some(2));
+    fn check_no_errors_with_siblings() -> Result<()> {
+        let text = indoc! {"
+            * List item
+                * Nested list item
+                    * More nested list item
+                    * More nested list item
+                        * Most nested list item
+                        * Most nested list item
+                    * More nested list item
+                * Nested list item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 
     #[test]
-    fn blockquote_indent_drops_one_tab_after_the_marker() {
-        let lines = vec![">\t* Foo".to_owned()];
-        let position = Sourcepos::from((1, 3, 1, 7));
-        assert_eq!(MD007::blockquote_indent(&lines, position), Some(0));
+    fn check_no_errors_with_paragraphs() -> Result<()> {
+        let text = indoc! {"
+            * List item
+              continued
+                * Nested list item
+                    * More nested list item
+                    * More nested list item
+
+                      Another paragraph
+                        * Most nested list item
+                        * Most nested list item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 
     #[test]
-    fn blockquote_indent_without_marker() {
-        let lines = vec!["  * Foo".to_owned()];
-        let position = Sourcepos::from((1, 3, 1, 7));
-        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    fn check_errors_with_siblings() -> Result<()> {
+        let text = indoc! {"
+            * List item
+                * Nested list item
+                    * More nested list item
+                     * More nested list item indented by 5 spaces
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((4, 10, 4, 53)))];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 
     #[test]
-    fn blockquote_indent_beyond_last_line() {
-        let lines = vec!["> * Foo".to_owned()];
-        let position = Sourcepos::from((2, 3, 2, 7));
-        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    fn check_no_errors_with_wide_padding() -> Result<()> {
+        let text = indoc! {"
+            *   List item
+                * Nested list item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 
     #[test]
-    fn blockquote_indent_beyond_end_of_line() {
-        let lines = vec!["> ".to_owned()];
-        let position = Sourcepos::from((1, 9, 1, 9));
-        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    fn check_no_errors_with_tab_after_marker() -> Result<()> {
+        let text = "*\tList item\n    * Nested list item\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 
     #[test]
-    fn blockquote_indent_inside_a_multibyte_character() {
-        let lines = vec!["\u{3042}> * Foo".to_owned()];
-        let position = Sourcepos::from((1, 3, 1, 7));
-        assert_eq!(MD007::blockquote_indent(&lines, position), None);
+    fn check_no_errors_top_level_at_indent() -> Result<()> {
+        let text =
+            "  * List item indented by 2 spaces\n  * List item indented by 2 spaces\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::new(2);
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_blockquote_in_item() -> Result<()> {
+        let text = indoc! {"
+            * List item
+              > * List in blockquote
+              >   * Nested list indented by 2 spaces
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 7, 3, 40)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_tabs() -> Result<()> {
+        let text = "* List item\n\t* Nested list item\n\t\t* More nested list item\n\t* Nested list item\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_tabs() -> Result<()> {
+        let text = "* List item\n\t * Nested list item indented by 5 columns\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 3, 2, 42)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_with_siblings_in_blockquote() -> Result<()> {
+        let text = indoc! {"
+            > * List item
+            >     * Nested list item
+            >         * More nested list item
+            >         * More nested list item
+            >     * Nested list item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // `>\t` leaves two columns of indentation, as `>   ` does.
+    #[test]
+    fn check_errors_with_tab_in_blockquote() -> Result<()> {
+        let text = ">\t* List\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 3, 1, 8)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_top_level_after_another_list() -> Result<()> {
+        let text = " 1. List item\n   * List item indented by 3 spaces\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::new(2);
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 35)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // See #481.
+    #[test]
+    fn check_errors_under_ordered_item() -> Result<()> {
+        let text = "1. List item\n   * Nested list item indented by 3 spaces\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 4, 2, 42)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_in_misindented_list() -> Result<()> {
+        let text = " * List item\n    * Nested list item\n    * Nested list item\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 2, 3, 22))),
+            rule.to_violation(path.clone(), Sourcepos::from((2, 5, 2, 22))),
+            rule.to_violation(path, Sourcepos::from((3, 5, 3, 22))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_with_tabs_and_indent_2() -> Result<()> {
+        let text = "* List item\n\t* Nested list item\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::new(2);
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((2, 2, 2, 19)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_under_misindented_sibling() -> Result<()> {
+        let text = "* List item\n * List item\n    * Nested list item\n".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 2, 3, 22))),
+            rule.to_violation(path, Sourcepos::from((3, 5, 3, 22))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    // Baseline for #481, which is expected to change how parents are measured.
+    #[test]
+    fn check_no_errors_with_unusual_parents() -> Result<()> {
+        let text = indoc! {"
+            *
+                * Nested under an empty item
+
+            Paragraph
+
+            *     Indented code in an item
+                * Nested list item
+
+            Paragraph
+
+            1. List item
+                * Nested under an ordered item
+
+            Paragraph
+
+            10. List item
+                * Nested under an ordered item
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD007::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 }

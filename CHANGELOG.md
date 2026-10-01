@@ -66,6 +66,12 @@ parsed and therefore what gets reported.
   them. This is the report a reversed link `(text)[http://www.example.com/]`
   used to raise, and mado has no rule of its own for that typo, so it now goes
   unreported (#418)
+- **Breaking:** MD007 measures a nested item from the item that contains it,
+  and a top-level item from the start of the line or blockquote, rather than
+  from the item above it, and expands tabs to tab stops. Results change in both
+  directions. With the default `indent`, for example, a correctly indented item
+  two levels deep after a sibling, or `* a` followed by `\t* b`, is no longer
+  reported, while `>\t* a` now is (#479)
 
 ### Fixed
 
