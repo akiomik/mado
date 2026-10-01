@@ -72,6 +72,10 @@ parsed and therefore what gets reported.
   tab counts to the next tab stop rather than as one column. Results change in
   both directions. With the default `indent`, for example, `* a` followed by
   `\t* b` is no longer reported, while `>\t* a` now is (#479)
+- **Breaking:** MD005 measures indentation as CommonMark does, in columns
+  after any block quote marker, instead of in bytes from the start of the
+  line. Results change, in both directions, for some lists indented with tabs,
+  after a byte order mark, or inside blockquotes (#483)
 
 ### Fixed
 
