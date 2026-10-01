@@ -58,7 +58,8 @@ impl MD005 {
                     }
                 }
             } else {
-                // Lists below this node get their own baseline; see #486.
+                // Lists below this node are checked too, against their own
+                // baseline; see #486.
                 //
                 // NOTE: markdownlint reports nothing inside a blockquote here. It
                 // measures indentation from the raw line, so `>   * Foo` counts as
