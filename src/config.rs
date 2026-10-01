@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 pub mod lint;
 
-pub use lint::Lint;
+pub use lint::{GitignorePolicy, Lint};
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -9,12 +9,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-# Read the `[package]` table, not the first `version =` in the file: the
-# workspace tables above it can grow one of their own, and a dependency pinned
-# in table form would otherwise be read as mado's version.
-#
-# Take what is between the quotes, or the bare value if there are none, rather
-# than whatever `cut` makes of a line with no delimiter in it.
+# The `[package]` table, not the first `version =` in the file: a workspace
+# table above it can carry a `version` of its own, and would be read as mado's.
 version=$(sed -n '/^\[package\]$/,/^\[/{
   s/^version = "\{0,1\}\([^"]*\)"\{0,1\}$/\1/p
 }' Cargo.toml | head -1)

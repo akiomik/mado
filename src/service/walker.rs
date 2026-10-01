@@ -7,6 +7,8 @@ use miette::IntoDiagnostic as _;
 use miette::Result;
 use miette::miette;
 
+use crate::config::GitignorePolicy;
+
 #[non_exhaustive]
 pub struct WalkParallelBuilder;
 
@@ -15,7 +17,7 @@ impl WalkParallelBuilder {
     pub fn build(
         patterns: &[PathBuf],
         respect_ignore: bool,
-        respect_gitignore: bool,
+        respect_gitignore: GitignorePolicy,
     ) -> Result<WalkParallel> {
         let (head_pattern, tail_patterns) = patterns
             .split_first()
@@ -26,7 +28,16 @@ impl WalkParallelBuilder {
         }
 
         builder.ignore(respect_ignore);
-        builder.git_ignore(respect_gitignore);
+        builder.git_ignore(respect_gitignore != GitignorePolicy::Never);
+        // `require_git` decides whether a repository has to be there for a
+        // `.gitignore` to apply at all. It also decides whether a repository
+        // marker bounds the search upward, which is why `Always` reads
+        // `.gitignore` files from every parent directory.
+        builder.require_git(respect_gitignore != GitignorePolicy::Always);
+        // Neither of these travels with the tree being linted, so reading them
+        // makes the same source lint differently on different machines.
+        builder.git_global(false);
+        builder.git_exclude(false);
 
         // NOTE: Expect performance improvements with pre-filtering
         let types = TypesBuilder::new()
@@ -44,6 +55,7 @@ impl WalkParallelBuilder {
 mod tests {
     extern crate alloc;
 
+    use crate::config::GitignorePolicy;
     use alloc::sync::Arc;
     use miette::{Context as _, IntoDiagnostic as _};
     use std::{
@@ -94,7 +106,7 @@ mod tests {
             Path::new("mado.toml").to_path_buf(),
             Path::new("README.md").to_path_buf(),
         ];
-        let builder = WalkParallelBuilder::build(&paths, true, true)?;
+        let builder = WalkParallelBuilder::build(&paths, true, GitignorePolicy::default())?;
         let collector = PathCollector::new();
 
         builder.run(|| Box::new(collector.gen_visitor()));
@@ -113,7 +125,7 @@ mod tests {
 
     #[test]
     fn build_empty_patterns() {
-        let result = WalkParallelBuilder::build(&[], true, true);
+        let result = WalkParallelBuilder::build(&[], true, GitignorePolicy::default());
         assert!(result.is_err());
     }
 }

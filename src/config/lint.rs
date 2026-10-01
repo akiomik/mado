@@ -1,6 +1,9 @@
+use core::fmt;
+
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use miette::{IntoDiagnostic as _, Result};
-use serde::{Deserialize, Serialize};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{output::Format, rule, rule::Rule};
 
@@ -36,12 +39,71 @@ pub use md036::MD036;
 pub use md041::MD041;
 pub use md046::MD046;
 
+/// When `.gitignore` files are read.
+///
+/// Git itself only applies them inside a repository, and the `ignore` crate
+/// follows it. A tree that arrives without its Git metadata -- a source
+/// archive, a Docker context copied without `.git` -- therefore lints
+/// differently from a clone of the same tree unless asked otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum GitignorePolicy {
+    /// Never, whatever the tree carries.
+    Never,
+    /// Inside a repository, as Git does.
+    #[default]
+    RepositoryOnly,
+    /// Whether or not the tree carries Git metadata. Without a repository to
+    /// stop at, `.gitignore` files apply from every parent directory, and a
+    /// repository below the path being linted does not bound the search --
+    /// the same terms `rg --no-require-git` has.
+    Always,
+}
+
+const POLICIES: &[&str] = &["never", "repository-only", "always"];
+
+struct GitignorePolicyVisitor;
+
+impl Visitor<'_> for GitignorePolicyVisitor {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("`never`, `repository-only` or `always`")
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        match value {
+            "never" => Ok(GitignorePolicy::Never),
+            "repository-only" => Ok(GitignorePolicy::RepositoryOnly),
+            "always" => Ok(GitignorePolicy::Always),
+            other => Err(E::unknown_variant(other, POLICIES)),
+        }
+    }
+
+    /// 0.3.x wrote this as a boolean, so say which policy the one written
+    /// means rather than leaving a reader of the error to guess.
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
+        let meant = if value { "repository-only" } else { "never" };
+        Err(E::custom(format_args!(
+            "no longer a boolean: write \"{meant}\" for what `{value}` meant"
+        )))
+    }
+
+    type Value = GitignorePolicy;
+}
+
+impl<'de> Deserialize<'de> for GitignorePolicy {
+    #[inline]
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(GitignorePolicyVisitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 #[allow(clippy::exhaustive_structs)]
 pub struct Lint {
     pub respect_ignore: bool,
-    pub respect_gitignore: bool,
+    pub respect_gitignore: GitignorePolicy,
     pub output_format: Format,
     pub quiet: bool,
     pub exclude: Vec<Glob>,
@@ -263,7 +325,7 @@ impl Default for Lint {
     fn default() -> Self {
         Self {
             respect_ignore: true,
-            respect_gitignore: true,
+            respect_gitignore: GitignorePolicy::default(),
             output_format: Format::Concise,
             quiet: false,
             exclude: vec![],
@@ -383,6 +445,53 @@ mod tests {
     use rule::Tag;
 
     use super::*;
+
+    #[test]
+    fn gitignore_policy_round_trips_through_toml() -> Result<()> {
+        // Serialize is derived and Deserialize is written by hand, so the two
+        // have to be held to the same spellings.
+        for policy in [
+            GitignorePolicy::Never,
+            GitignorePolicy::RepositoryOnly,
+            GitignorePolicy::Always,
+        ] {
+            let written = toml::to_string(&Lint {
+                respect_gitignore: policy,
+                ..Lint::default()
+            })
+            .into_diagnostic()?;
+            let read: Lint = toml::from_str(&written).into_diagnostic()?;
+
+            assert_eq!(read.respect_gitignore, policy);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn gitignore_policy_names_the_values_it_takes() {
+        let unknown = toml::from_str::<Lint>("respect-gitignore = \"repo-only\"")
+            .err()
+            .map(|err| err.to_string())
+            .unwrap_or_default();
+        assert!(unknown.contains("repository-only"), "{unknown}");
+
+        // Anything that is neither a string nor the boolean 0.3.x wrote is
+        // answered by what the visitor says it expects.
+        let wrong_kind = toml::from_str::<Lint>("respect-gitignore = 1")
+            .err()
+            .map(|err| err.to_string())
+            .unwrap_or_default();
+        assert!(wrong_kind.contains("repository-only"), "{wrong_kind}");
+    }
+
+    #[test]
+    fn gitignore_policy_says_what_a_boolean_meant() {
+        let read = toml::from_str::<Lint>("respect-gitignore = true");
+        let message = read.err().map(|err| err.to_string()).unwrap_or_default();
+
+        assert!(message.contains("repository-only"), "{message}");
+    }
 
     #[test]
     fn exclude_set() -> Result<()> {
