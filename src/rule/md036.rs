@@ -92,6 +92,23 @@ mod tests {
 
     use super::*;
 
+    // MD036 reports a paragraph once for each text node of its emphasis, so an
+    // emphasis holding a bare URL would be reported twice if the rule read a
+    // tree GFM's autolink extension had split the text of. Only MD034 reads
+    // one.
+    #[test]
+    fn check_errors_with_bare_url_inside_emphasis() -> Result<()> {
+        let text = "*see http://www.example.com/ now*".to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD036::default();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 1, 1, 33)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     #[test]
     fn check_errors() -> Result<()> {
         let text = indoc! {"

@@ -76,6 +76,31 @@ mod tests {
 
     use super::*;
 
+    // MD020 asks whether the text of a heading, and of a paragraph that reads
+    // as one, ends in a `#`. A closed heading whose text ends in a URL ends in
+    // a link once GFM's autolink extension has been applied, and the question
+    // has nothing to ask. Only MD034 reads a tree that has been.
+    #[test]
+    fn check_errors_with_bare_url_before_closing_hashes() -> Result<()> {
+        let text = indoc! {"
+            #see http://www.example.com/#
+
+            # see http://www.example.com/#
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD020::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((1, 1, 1, 29))),
+            rule.to_violation(path, Sourcepos::from((3, 1, 3, 30))),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     #[test]
     fn check_errors() -> Result<()> {
         let text = indoc! {"
