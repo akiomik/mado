@@ -10,8 +10,9 @@ use super::{Metadata, RuleLike, Tag};
 ///
 /// A nested bullet passes when its parent item's `padding` plus its own
 /// `marker_offset` is `indent`, and a top-level bullet when its `marker_offset`
-/// is 0 or `indent`. Both are comrak's: columns from the start of the
-/// container's content, with tabs expanded.
+/// is 0 or `indent`. Both are comrak's, in columns with tabs expanded:
+/// `marker_offset` from the start of the container's content, and `padding`
+/// from the item's own marker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD007 {

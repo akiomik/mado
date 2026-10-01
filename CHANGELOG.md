@@ -66,10 +66,9 @@ parsed and therefore what gets reported.
   them. This is the report a reversed link `(text)[http://www.example.com/]`
   used to raise, and mado has no rule of its own for that typo, so it now goes
   unreported (#418)
-- **Breaking:** MD007 measures a nested bullet from the marker of the item that
-  contains it, and a top-level bullet from the start of the line or of the
-  blockquote's content, instead of comparing each bullet with the one above it.
-  Tabs are expanded to tab stops. Results change in both directions. With the
+- **Breaking:** MD007 compares a nested bullet with the item that contains it,
+  instead of with the bullet above it, using comrak's list offsets, which
+  expand tabs to tab stops. Results change in both directions. With the
   default `indent`, for example, `* a` followed by `\t* b` is no longer
   reported, while `>\t* a` now is (#479)
 
