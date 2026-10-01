@@ -11,8 +11,9 @@ use super::{Metadata, RuleLike, Tag};
 /// item, counted from the start of the content that holds the list. Items of
 /// different lists are not compared.
 ///
-/// This differs from mdl, which compares items at the same depth across the
-/// whole document, and reports nothing in a blockquote.
+/// This differs from mdl, which compares the items of all bullet lists, or of
+/// all ordered lists, at the same depth, and measures only the whitespace at
+/// the start of the line.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MD005;
@@ -416,6 +417,27 @@ mod tests {
         let rule = MD005::new();
         let actual = rule.check(&doc)?;
         let expected = vec![rule.to_violation(path, Sourcepos::from((3, 2, 3, 4)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_errors_against_first_item() -> Result<()> {
+        let text = indoc! {"
+             1. a
+            1. b
+            1. c
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![
+            rule.to_violation(path.clone(), Sourcepos::from((2, 1, 2, 4))),
+            rule.to_violation(path, Sourcepos::from((3, 1, 3, 4))),
+        ];
         assert_eq!(actual, expected);
         Ok(())
     }
