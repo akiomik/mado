@@ -299,6 +299,8 @@ mod tests {
             ),
             (">\t* a\n", 4, &[(1, 3)]),
             ("* a\n  > * b\n  >   * c\n", 4, &[(3, 7)]),
+            ("> * a\n>\t  * b\n", 4, &[]),
+            // Each line's content starts after its own `>` prefix
             (">* a\n>    * b\n", 4, &[(2, 6)]),
         ];
         for &(text, indent, expected) in cases {

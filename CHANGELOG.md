@@ -67,7 +67,7 @@ parsed and therefore what gets reported.
   used to raise, and mado has no rule of its own for that typo, so it now goes
   unreported (#418)
 - **Breaking:** MD007 compares a nested bullet with the item that contains it,
-  instead of with the bullet above it, using comrak's list offsets, which
+  instead of with the item above it, using comrak's list offsets, which
   expand tabs to tab stops. Results change in both directions. With the
   default `indent`, for example, `* a` followed by `\t* b` is no longer
   reported, while `>\t* a` now is (#479)
