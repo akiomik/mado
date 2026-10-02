@@ -326,25 +326,6 @@ mod tests {
     }
 
     #[test]
-    fn check_no_errors_for_blockquote_after_list() -> Result<()> {
-        let text = indoc! {"
-            * a
-            * b
-
-            >  * c
-        "}
-        .to_owned();
-        let path = Path::new("test.md").to_path_buf();
-        let arena = Arena::new();
-        let doc = Document::new(&arena, path, text)?;
-        let rule = MD005::new();
-        let actual = rule.check(&doc)?;
-        let expected = vec![];
-        assert_eq!(actual, expected);
-        Ok(())
-    }
-
-    #[test]
     fn check_no_errors_in_deep_nesting() -> Result<()> {
         let text = indoc! {"
             * a
@@ -438,6 +419,23 @@ mod tests {
             rule.to_violation(path.clone(), Sourcepos::from((2, 1, 2, 4))),
             rule.to_violation(path, Sourcepos::from((3, 1, 3, 4))),
         ];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_no_errors_for_lists_with_different_markers() -> Result<()> {
+        let text = indoc! {"
+             * a
+            - b
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let rule = MD005::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }

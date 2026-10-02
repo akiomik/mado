@@ -76,8 +76,7 @@ parsed and therefore what gets reported.
   after any block quote marker, instead of in bytes from the start of the
   line. Results change, in both directions, for some lists indented with tabs,
   after a byte order mark, or inside blockquotes (#483)
-- **Breaking:** MD005 compares each item with the first item of its own list,
-  instead of with the first item at the same depth anywhere in the document.
+- **Breaking:** MD005 compares each item with the first item of its own list.
   Different lists are no longer compared, so a sublist under a parent of a
   different width is not reported. Results change in both directions (#488)
 
