@@ -176,17 +176,16 @@ mod tests {
         Ok(())
     }
 
-    // GFM autolinks this and comrak does not, so mado does not report it.
-    // #421. Failing here means comrak closed the gap: expect a violation.
+    // A URL with a scheme is linked even when its host has no period.
     #[test]
-    fn check_no_errors_with_domain_without_period() -> Result<()> {
+    fn check_errors_with_domain_without_period() -> Result<()> {
         let text = "For more information, see http://localhost/x.".to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
-        let doc = Document::new(&arena, path, text)?;
+        let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 27, 1, 45)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -300,18 +299,16 @@ mod tests {
         Ok(())
     }
 
-    // GFM leaves this whole thing inside the link and comrak autolinks
-    // through it, so mado reports a URL GFM does not. #422. Failing here means
-    // comrak closed the gap: expect no violation.
+    // The link text holds the nested `[b]`, so the URL is inside the link.
     #[test]
-    fn check_errors_with_bare_url_after_nested_brackets() -> Result<()> {
+    fn check_no_errors_with_bare_url_after_nested_brackets() -> Result<()> {
         let text = "see [a [b] http://x.example.com/](y) now".to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
-        let doc = Document::new(&arena, path.clone(), text)?;
+        let doc = Document::new(&arena, path, text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 12, 1, 37)))];
+        let expected = vec![];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -333,18 +330,16 @@ mod tests {
         Ok(())
     }
 
-    // GFM autolinks a scheme in any case and comrak does not, so mado does
-    // not report it. #420. Failing here means comrak closed the gap: expect a
-    // violation.
+    // Unlike `www.`, a scheme is linked when it is written in upper case.
     #[test]
-    fn check_no_errors_with_upper_case_scheme() -> Result<()> {
+    fn check_errors_with_upper_case_scheme() -> Result<()> {
         let text = "For more information, see HTTP://www.example.com/.".to_owned();
         let path = Path::new("test.md").to_path_buf();
         let arena = Arena::new();
-        let doc = Document::new(&arena, path, text)?;
+        let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 27, 1, 50)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -373,9 +368,8 @@ mod tests {
         Ok(())
     }
 
-    // #421 again: GFM links the whole URL, comrak links none of it, and the
-    // `@` is left for the email matcher — so the report starts at the password
-    // rather than at the URL.
+    // The whole URL is linked, userinfo included, rather than an email address
+    // read out of it.
     #[test]
     fn check_errors_with_userinfo() -> Result<()> {
         let text = "see http://user:pass@www.example.com/ now".to_owned();
@@ -384,7 +378,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD034::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 17, 1, 37)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((1, 5, 1, 38)))];
         assert_eq!(actual, expected);
         Ok(())
     }

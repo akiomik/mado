@@ -109,7 +109,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD046::default();
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 5, 4, 0)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((3, 5, 3, 14)))];
         assert_eq!(actual, expected);
         Ok(())
     }
@@ -156,7 +156,7 @@ mod tests {
         let doc = Document::new(&arena, path.clone(), text)?;
         let rule = MD046::new(CodeBlockStyle::Consistent);
         let actual = rule.check(&doc)?;
-        let expected = vec![rule.to_violation(path, Sourcepos::from((8, 5, 9, 0)))];
+        let expected = vec![rule.to_violation(path, Sourcepos::from((8, 5, 8, 14)))];
         assert_eq!(actual, expected);
         Ok(())
     }
