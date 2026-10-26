@@ -158,6 +158,32 @@ mod tests {
         Ok(())
     }
 
+    // Blank lines between an indented code block's lines belong to it, and the
+    // ones after its last line do not.
+    #[test]
+    fn check_errors_with_indented_code_block() -> Result<()> {
+        let text = indoc! {"
+            Some text here
+
+                This is a code block
+
+
+                Some code here
+
+
+            Some more text here
+        "}
+        .to_owned();
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path.clone(), text)?;
+        let rule = MD012::new();
+        let actual = rule.check(&doc)?;
+        let expected = vec![rule.to_violation(path, Sourcepos::from((8, 1, 8, 1)))];
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
     #[test]
     fn check_no_errors_with_nested_code_block() -> Result<()> {
         let text = indoc! {"

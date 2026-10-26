@@ -49,18 +49,6 @@ parsed and therefore what gets reported.
   carries its own two: a `mailto:foo@example.com` or `xmpp:foo@example.com` is
   still reported, and from the scheme rather than from the address, that being
   where GFM starts the link (#418)
-- **Breaking:** MD034 reports the URLs comrak autolinks, which is GFM as mado
-  parses it, and comrak and GitHub disagree in three places. Two are reports
-  lost: a scheme not written in lower case, such as `HTTP://www.example.com/`
-  (#420), and a host with no period in it, such as `http://localhost/x`, the
-  `http://localhost:3000/` a development setup is written with, or the
-  `http://user:pass@www.example.com/` a URL carrying userinfo is — the last two
-  because the host is read up to the `:` and stops there (#421). GitHub links
-  all of them whole; mado reports the userinfo one from its password and the
-  others not at all. One is a report gained: a URL inside link text that follows
-  a nested `]`, as in `[note [1] https://example.com/doc](/x)`, which GitHub
-  leaves inside the link (#422). Each is comrak's to close, and each is pinned
-  by a test that fails when it is (#418)
 - **Breaking:** MD034 no longer reports a URL inside square brackets — a
   shortcut link, or an image's alt text — GFM autolinking nothing inside of
   them. This is the report a reversed link `(text)[http://www.example.com/]`
@@ -76,9 +64,12 @@ parsed and therefore what gets reported.
   after any block quote marker, instead of in bytes from the start of the
   line. Results change, in both directions, for some lists indented with tabs,
   after a byte order mark, or inside blockquotes (#483)
+- Update the Markdown parser (`comrak`) from 0.54.0 to 0.57.0 (#463, #502)
 
 ### Fixed
 
+- MD012: report consecutive blank lines after an indented code block. They
+  were skipped as part of the block, which they are not (#502)
 - MD027: measure a quoted paragraph's line from the line itself rather than from
   the first inline reported on it, which an inline spanning two lines leaves
   beginning where it closed rather than where the line's content does. Reports
