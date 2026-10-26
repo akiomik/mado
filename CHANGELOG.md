@@ -70,6 +70,12 @@ parsed and therefore what gets reported.
 
 - MD012: report consecutive blank lines after an indented code block. They
   were skipped as part of the block, which they are not (#502)
+- MD013: with `code-blocks = false`, stop skipping the blank lines after an
+  indented code block as part of the block. A line there holding only
+  whitespace, and longer than the limit, is now reported (#502)
+- MD014 and MD046: end an indented code block's position at its last line of
+  code rather than at the blank line after it. No output format prints the end;
+  it is for a library caller reading `Violation::position()` (#502)
 - MD027: measure a quoted paragraph's line from the line itself rather than from
   the first inline reported on it, which an inline spanning two lines leaves
   beginning where it closed rather than where the line's content does. Reports
