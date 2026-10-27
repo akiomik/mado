@@ -54,7 +54,7 @@ jobs:
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os-name: Linux-aarch64
-            runs-on: ubuntu-latest
+            runs-on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
           - os-name: macOS-x86_64
             runs-on: macOS-latest
@@ -71,14 +71,15 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
-    - name: Build binary
-      uses: houseabsolute/actions-rust-cross@21b0f18dc621b25bfae556ff2791fca4173121e8 # v1.0.8
+    - name: Install Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       with:
-        command: build
         target: ${{ matrix.platform.target }}
-        toolchain: "1.91.1"
-        args: "--locked --release"
-        strip: true
+        cache: false # CD runs months apart, so there is no cache worth restoring.
+    - name: Build binary
+      run: cargo build --locked --release --target ${{ matrix.platform.target }}
+      env:
+        CARGO_PROFILE_RELEASE_STRIP: true
     # This action no longer creates the release, so its `changes-file` only
     # picks a file to archive. Empty it, or the action looks for the `Changes.md`
     # this repository does not have; `extra-files` says what the archive holds.
