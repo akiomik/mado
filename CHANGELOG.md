@@ -13,10 +13,12 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-27
+
 ### Changed
 
 - **Breaking:** `respect-gitignore` takes a policy rather than a boolean, since
-  there are three behaviours to name rather than two (#436):
+  there are three behaviours to name rather than two (#447):
 
   | 0.3.x | 0.4.0 |
   |---|---|
@@ -38,10 +40,10 @@ parsed and therefore what gets reported.
 - The global Git ignore file and `.git/info/exclude` are no longer read. mado
   had been reading both by inheriting the walker's defaults; neither travels
   with the tree being linted, so reading them had one source lint differently on
-  another machine (#436)
+  another machine (#447)
 - **Breaking:** `config::lint::Lint::respect_gitignore` is a
   `config::lint::GitignorePolicy` rather than a `bool`, and
-  `service::walker::WalkParallelBuilder::build` takes one (#436)
+  `service::walker::WalkParallelBuilder::build` takes one (#447)
 - **Breaking:** MD034 no longer reports a URL whose scheme GFM does not
   autolink. `http://`, `https://` and `ftp://` are the ones it does, so
   `ftps://`, `file://`, `ssh://` and the rest are left alone, none of them being
@@ -95,7 +97,7 @@ parsed and therefore what gets reported.
   text is reported for the spaces after it (#455). The position a violation
   carries runs from the content after the marker to the end of the line, where it
   ran to the end of the first inline on it; no output format prints that, so it is
-  for a library caller reading `Violation::position()` (#439)
+  for a library caller reading `Violation::position()` (#452)
 - MD027: measure every block a quote holds rather than its first alone, so what
   follows a blank quoted line is measured too. `> Quoted text` above a `>` and a
   `>  More quoted text` reports the third line, as it already did when that line
@@ -113,7 +115,7 @@ parsed and therefore what gets reported.
   begins, which moves the column right when it is written with more spaces than
   the four it needs. A lazily continued line of a block after the first is
   measured as well, which is how the misread #455 describes reaches documents it
-  did not before (#454)
+  did not before (#460)
 - MD034: report the URLs GFM autolinks, rather than every string a URL scanner
   accepts. `http\://www.example.com/`, which is how a URL is written so that it
   is *not* autolinked, was reported as one. A `www.` host written without a
@@ -278,7 +280,8 @@ parsed and therefore what gets reported.
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/akiomik/mado/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/akiomik/mado/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/akiomik/mado/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/akiomik/mado/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/akiomik/mado/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/akiomik/mado/compare/v0.2.2...v0.3.0

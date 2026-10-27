@@ -183,10 +183,10 @@ Mado is compatible with GitHub Actions.
 
 ```yaml
 # Basic usage (runs `mado check .`)
-- uses: akiomik/mado@v0.3.2
+- uses: akiomik/mado@v0.4.0
 
 # Custom usage (runs `mado` with specified arguments)
-- uses: akiomik/mado@v0.3.2
+- uses: akiomik/mado@v0.4.0
   with:
     args: '--config path/to/mado.toml check path/to/*.md'
 ```
