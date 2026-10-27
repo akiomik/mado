@@ -65,6 +65,9 @@ parsed and therefore what gets reported.
   line. Results change, in both directions, for some lists indented with tabs,
   after a byte order mark, or inside blockquotes (#483)
 - Update the Markdown parser (`comrak`) from 0.54.0 to 0.57.0 (#463, #502)
+- **Breaking:** the Linux arm64 binary needs glibc 2.34 or later, as the x86_64
+  one already does. It no longer starts on systems with an older glibc, such as
+  Amazon Linux 2, Ubuntu 20.04 and Debian 11 (#509)
 
 ### Fixed
 
