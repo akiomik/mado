@@ -1,5 +1,5 @@
-prev_version := "0.3.1"
-version := "0.3.2"
+prev_version := "0.3.2"
+version := "0.4.0"
 tempdir := `mktemp -d`
 
 default: fmt test lint
