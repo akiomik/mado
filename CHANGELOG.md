@@ -13,6 +13,19 @@ parsed and therefore what gets reported.
 
 ## [Unreleased]
 
+### Changed
+
+- Update the Markdown parser (`comrak`) from 0.57.0 to 0.59.0 (#518)
+
+### Fixed
+
+- MD004, MD005, MD006, MD007, MD029, MD030 and MD041: end a list item's position
+  at the end of its line when the item ends with a thematic break followed by a
+  blank line. The end fell short of the line, and could come before the start.
+  MD041 reports the list, which ends where its last item does. No output format
+  prints the end; it is for a library caller reading `Violation::position()`
+  (#518)
+
 ## [0.4.0] - 2026-10-27
 
 ### Changed
