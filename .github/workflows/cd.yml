@@ -25,7 +25,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      uses: actions/checkout@v7.0.1
       with:
         persist-credentials: false
     # CI runs this on pull requests and never sees a tag, but a tag can be
@@ -78,11 +78,11 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      uses: actions/checkout@v7.0.1
       with:
         persist-credentials: false
     - name: Install Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      uses: actions-rust-lang/setup-rust-toolchain@v2.0.0
       with:
         target: ${{ matrix.platform.target }}
         cache: false # CD runs months apart, so there is no cache worth restoring.
@@ -118,7 +118,7 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         $hash = (Get-FileHash $env:ARCHIVE -Algorithm SHA256).Hash.ToLower()
         [IO.File]::WriteAllText("$PWD\$env:ARCHIVE.sha256", "$hash *$env:ARCHIVE`n")
-    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+    - uses: actions/upload-artifact@v7.0.2
       with:
         name: binary-${{ matrix.platform.os-name }}
         path: ${{ matrix.platform.archive }}*
@@ -141,13 +141,13 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      uses: actions/checkout@v7.0.1
       with:
         persist-credentials: false
     - name: Extract release notes
       shell: bash
       run: bash scripts/release/extract-changelog.sh "${GITHUB_REF_NAME#v}" > RELEASE_NOTES.md
-    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+    - uses: actions/download-artifact@v8.0.2
       with:
         pattern: binary-*
         path: dist

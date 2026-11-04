@@ -11,7 +11,7 @@ jobs:
   taplo:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
       # Taplo's own build, checked against its hash, rather than an action
       # maintained by an individual. Dependabot does not see this: bump the
       # version and the hash together by hand.

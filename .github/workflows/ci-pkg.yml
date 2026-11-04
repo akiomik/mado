@@ -13,7 +13,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@c262868c096d909fc278daa87ed9772967331ea3 # 2026.11.02.1
+        uses: Homebrew/actions/setup-homebrew@2026.11.02.1
         with:
             stable: true
         env:
@@ -24,7 +24,7 @@ jobs:
       - name: Rename akiomik/mado to akiomik/homebrew-mado
         run: mv /opt/homebrew/Library/Taps/akiomik/mado /opt/homebrew/Library/Taps/akiomik/homebrew-mado
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
       - name: Show the latest commit
         run: git log -1
       - name: Run Homebrew info
@@ -39,7 +39,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository for updating HEAD
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
       # Scoop's own installer rather than an action maintained by an
       # individual. The runner is an administrator, which the installer
       # refuses unless told to go ahead.
@@ -58,7 +58,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
       # NOTE: Cyberboss/install-winget@1 may reach rate limit and not install winget,
       #       so use scoop instead
       - name: Install Scoop
@@ -81,7 +81,7 @@ jobs:
     name: Test Nix
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        - uses: actions/checkout@v7.0.1
+        - uses: cachix/install-nix-action@v31.11.3
         - run: nix build
         - run: nix flake check
