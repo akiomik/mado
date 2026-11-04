@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
       # The action downloads the release it was published with, and a version
       # bump names that release before the tag creating it exists, so testing
       # the default made this job fail on every bump. Point it at a release

@@ -23,9 +23,9 @@ if [[ ! -x "$COMMAND" ]]; then
   ARCH=$(uname -m)
   UNAME=$(uname -s)
   # Linux reports `aarch64` where the release names the same architecture
-  # `arm64`; macOS reports `arm64` already. The asset names come from
-  # `houseabsolute/actions-rust-release` in `cd.yml`, so this mapping follows
-  # what that action publishes, not what `cd.yml` calls the platform.
+  # `arm64`; macOS reports `arm64` already. The asset names are the `archive`
+  # values in `cd.yml`'s package matrix, so this mapping follows those, not what
+  # `cd.yml` calls the platform.
   if [[ "$ARCH" == "aarch64" ]]; then
     ARCH="arm64"
   fi
