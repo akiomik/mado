@@ -12,8 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: uncenter/setup-taplo@b18c8c8302695fe63d6853bc004006215ac52b91 # v2
-        with:
-          version: "0.9.3"
+      # Taplo's own build, checked against its hash, rather than an action
+      # maintained by an individual. Dependabot does not see this: bump the
+      # version and the hash together by hand.
+      - name: Install Taplo
+        env:
+          TAPLO_VERSION: 0.9.3
+          TAPLO_SHA256: 889efcfa067b179fda488427d3b13ce2d679537da8b9ed8138ba415db7da2a5e
+        run: |
+          dir="$RUNNER_TEMP/taplo"
+          mkdir -p "$dir"
+          curl -sSfL -o "$dir/taplo.gz" "https://github.com/tamasfe/taplo/releases/download/${TAPLO_VERSION}/taplo-linux-x86_64.gz"
+          echo "${TAPLO_SHA256}  $dir/taplo.gz" | sha256sum --check --strict
+          gunzip "$dir/taplo.gz"
+          chmod +x "$dir/taplo"
+          echo "$dir" >> "$GITHUB_PATH"
       - name: Run Taplo
         run: taplo format --check
