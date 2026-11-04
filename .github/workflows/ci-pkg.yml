@@ -40,8 +40,16 @@ jobs:
     steps:
       - name: Checkout repository for updating HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@f1cc59be496ed3a1801a5f64efe5c60ba3d6bb75 # v5.0.1
+      # Scoop's own installer rather than an action maintained by an
+      # individual. The runner is an administrator, which the installer
+      # refuses unless told to go ahead.
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'install-scoop.ps1'
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile $installer
+          & $installer -RunAsAdmin
+          Join-Path $HOME 'scoop\shims' >> $env:GITHUB_PATH
       - name: Install Mado via Scoop
         run: scoop install pkg\scoop\mado.json
 
@@ -53,8 +61,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # NOTE: Cyberboss/install-winget@1 may reach rate limit and not install winget,
       #       so use scoop instead
-      - name: Setup Scoop
-        uses: MinoruSekine/setup-scoop@f1cc59be496ed3a1801a5f64efe5c60ba3d6bb75 # v5.0.1
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'install-scoop.ps1'
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile $installer
+          & $installer -RunAsAdmin
+          Join-Path $HOME 'scoop\shims' >> $env:GITHUB_PATH
       - name: Install WinGet
         run: scoop install winget
       - name: Run winget validate
