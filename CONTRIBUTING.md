@@ -94,7 +94,9 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    The GitHub Action downloads the release `entrypoint.sh` names, so a tag that
    leaves it behind runs the previous version's binary. CI checks that these
    agree with `Cargo.toml`, so forgetting one fails before the tag.
-1. Tag the merged commit `vx.y.z` and push the tag. That starts CD.
+1. Tag the merged commit `vx.y.z` and push the tag, or publish a release for a
+   new `vx.y.z` tag on the merged commit from GitHub's release page. Either
+   starts CD.
 1. Once CD has published the release, restore anything
    [a configuration change](#changing-a-configuration-keys-shape) had to take
    out of `mado.toml`, set `version` / `prev_version` in the `justfile`, refresh
@@ -109,17 +111,19 @@ Mark a breaking change with a `**Breaking:**` prefix under `Changed`.
    heading for the version, and stops rather than leave the previous release's
    date behind if step 1 left that section undated.
 
-CD builds the binaries for every platform and publishes one release once all of
-them are packaged. Its body is that version's changelog section, extracted by
-`scripts/release/extract-changelog.sh`.
+CD builds the binaries for every platform and uploads them in one go once all
+of them are packaged. For a pushed tag it creates the release, whose body is
+that version's changelog section, extracted by
+`scripts/release/extract-changelog.sh`. For a release made on GitHub it adds the
+binaries to that release and keeps the notes written there. The changelog still
+needs the section either way, since CD checks it before building.
 
 Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
 to look at. It also stops before building anything if the tag disagrees with any
 of the versions in step 2, or if the changelog has no section for it.
 
-Re-running CD for a tag that already has a release fails: the publish action
-refuses to add to one, whether or not it could. Delete the release first if you
-need to build the tag again.
+Re-running CD for a tag that already has a release uploads the binaries again,
+replacing any of the same name.
 
 CI checks that the section for the version in `Cargo.toml` exists, so a bump
 without a changelog section fails before it reaches the tag.
