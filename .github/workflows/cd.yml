@@ -167,8 +167,9 @@ jobs:
     # Releases are made either by hand, which creates the tag and so starts
     # this workflow, or by pushing the tag. Add to the release when it exists,
     # keeping its notes, and otherwise create it with this tag's changelog
-    # section. `--clobber` lets a re-run replace a partial upload with the same
-    # files from this run's artifacts.
+    # section. Never replace an asset already there: the package manifests
+    # carry the hashes of the published archives, and a rebuild does not
+    # reproduce them byte for byte.
     - name: Upload to the release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -176,7 +177,7 @@ jobs:
       run: |
         tags="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
         if grep -qxF "$GITHUB_REF_NAME" <<< "$tags"; then
-          gh release upload "$GITHUB_REF_NAME" --clobber dist/*
+          gh release upload "$GITHUB_REF_NAME" dist/*
         else
           gh release create "$GITHUB_REF_NAME" --verify-tag --notes-file RELEASE_NOTES.md dist/*
         fi

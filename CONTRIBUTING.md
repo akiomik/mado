@@ -122,8 +122,10 @@ Only a `vx.y.z` tag starts CD, and a tag without the `v` is ignored with no run
 to look at. It also stops before building anything if the tag disagrees with any
 of the versions in step 2, or if the changelog has no section for it.
 
-Re-running CD for a tag that already has a release uploads the binaries again,
-replacing any of the same name.
+Re-running CD for a tag whose release already has some of the binaries fails
+rather than replace them, since the package manifests carry their hashes and a
+rebuild does not reproduce them. Delete those assets first if you need to build
+the tag again.
 
 CI checks that the section for the version in `Cargo.toml` exists, so a bump
 without a changelog section fails before it reaches the tag.
