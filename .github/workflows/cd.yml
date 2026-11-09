@@ -82,7 +82,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v2.0.0
+      uses: actions-rust-lang/setup-rust-toolchain@v2.0.1
       with:
         target: ${{ matrix.platform.target }}
         cache: false # CD runs months apart, so there is no cache worth restoring.
