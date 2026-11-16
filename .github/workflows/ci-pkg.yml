@@ -13,7 +13,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@2026.11.02.1
+        uses: Homebrew/actions/setup-homebrew@2026.11.09.1
         with:
             stable: true
         env:
