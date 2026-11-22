@@ -25,6 +25,8 @@ parsed and therefore what gets reported.
   MD041 reports the list, which ends where its last item does. No output format
   prints the end; it is for a library caller reading `Violation::position()`
   (#518)
+- MD004, MD029 and MD030: no longer overflow the stack on deeply nested
+  blockquotes (#484)
 
 ## [0.4.0] - 2026-10-27
 

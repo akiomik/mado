@@ -69,61 +69,60 @@ impl MD030 {
         }
     }
 
-    fn check_recursive<'a>(
+    // Iterative on purpose: recursing once per nested container overflows the
+    // stack on deeply nested blockquotes. Items are visited in document order,
+    // which also reaches lists inside blockquotes. `ordered_marker_width` needs
+    // no adjustment for them, because `sourcepos` columns already account for
+    // the `> ` prefix.
+    fn check_items<'a>(
         &self,
         root: &'a AstNode<'a>,
         path: &PathBuf,
         lines: &[String],
         violations: &mut Vec<Violation>,
     ) {
-        for node in root.children() {
-            if let NodeValue::List(list) = node.data.borrow().value {
-                for item_node in node.children() {
-                    if let NodeValue::Item(item) = item_node.data.borrow().value {
-                        // true if multiple Paragraph
-                        let mut is_multi = item_node.children().count() > 1;
+        for item_node in root.descendants() {
+            let NodeValue::Item(item) = item_node.data.borrow().value else {
+                continue;
+            };
+            let Some(parent) = item_node.parent() else {
+                continue;
+            };
+            let NodeValue::List(list) = parent.data.borrow().value else {
+                continue;
+            };
 
-                        // Check for single Paragraph with multiple lines
-                        if !is_multi
-                            && let Some(child_node) = item_node.first_child()
-                            && child_node.data.borrow().value == NodeValue::Paragraph
-                        {
-                            for inline_node in child_node.children() {
-                                if inline_node.data.borrow().value == NodeValue::SoftBreak {
-                                    is_multi = true;
-                                }
-                            }
-                        }
+            // true if multiple Paragraph
+            let mut is_multi = item_node.children().count() > 1;
 
-                        let position = item_node.data.borrow().sourcepos;
-                        let ordered_threshold = |configured: usize| {
-                            Self::ordered_marker_width(lines, position)
-                                .map(|width| configured + width)
-                        };
-
-                        let is_violated = match (is_multi, list.list_type) {
-                            (true, ListType::Bullet) => item.padding > self.ul_multi + 1,
-                            (true, ListType::Ordered) => ordered_threshold(self.ol_multi)
-                                .is_some_and(|threshold| item.padding > threshold),
-                            (false, ListType::Bullet) => item.padding > self.ul_single + 1,
-                            (false, ListType::Ordered) => ordered_threshold(self.ol_single)
-                                .is_some_and(|threshold| item.padding > threshold),
-                        };
-
-                        if is_violated {
-                            let violation = self.to_violation(path.clone(), position);
-                            violations.push(violation);
-                        }
-
-                        self.check_recursive(item_node, path, lines, violations);
+            // Check for single Paragraph with multiple lines
+            if !is_multi
+                && let Some(child_node) = item_node.first_child()
+                && child_node.data.borrow().value == NodeValue::Paragraph
+            {
+                for inline_node in child_node.children() {
+                    if inline_node.data.borrow().value == NodeValue::SoftBreak {
+                        is_multi = true;
                     }
                 }
-            } else {
-                // See the comment on the equivalent branch in MD029: lists reached
-                // through a blockquote or other non-item container must still be
-                // checked. `ordered_marker_width` needs no adjustment for them,
-                // because `sourcepos` columns already account for the `> ` prefix.
-                self.check_recursive(node, path, lines, violations);
+            }
+
+            let position = item_node.data.borrow().sourcepos;
+            let ordered_threshold = |configured: usize| {
+                Self::ordered_marker_width(lines, position).map(|width| configured + width)
+            };
+
+            let is_violated = match (is_multi, list.list_type) {
+                (true, ListType::Bullet) => item.padding > self.ul_multi + 1,
+                (true, ListType::Ordered) => ordered_threshold(self.ol_multi)
+                    .is_some_and(|threshold| item.padding > threshold),
+                (false, ListType::Bullet) => item.padding > self.ul_single + 1,
+                (false, ListType::Ordered) => ordered_threshold(self.ol_single)
+                    .is_some_and(|threshold| item.padding > threshold),
+            };
+
+            if is_violated {
+                violations.push(self.to_violation(path.clone(), position));
             }
         }
     }
@@ -151,7 +150,7 @@ impl RuleLike for MD030 {
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 
-        self.check_recursive(doc.ast, &doc.path, &doc.lines, &mut violations);
+        self.check_items(doc.ast, &doc.path, &doc.lines, &mut violations);
 
         Ok(violations)
     }
@@ -553,5 +552,16 @@ mod tests {
         let lines = vec!["10) Foo".to_owned()];
         let position = Sourcepos::from((1, 1, 1, 7));
         assert_eq!(MD030::ordered_marker_width(&lines, position), Some(3));
+    }
+
+    #[test]
+    fn check_does_not_overflow_the_stack_on_deeply_nested_blockquotes() -> Result<()> {
+        let text = ">".repeat(5000) + " * a";
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let actual = MD030::default().check(&doc)?;
+        assert_eq!(actual, vec![]);
+        Ok(())
     }
 }

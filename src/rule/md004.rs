@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use comrak::arena_tree::NodeEdge;
 use comrak::nodes::{AstNode, ListType, NodeList, NodeValue};
 use miette::Result;
 use rustc_hash::FxHashMap;
@@ -43,66 +44,65 @@ impl MD004 {
         Self { style }
     }
 
-    fn check_recursive<'a>(
+    // Iterative on purpose: recursing once per nested container overflows the
+    // stack on deeply nested blockquotes. The traversal is in document order.
+    // Only list items raise the level, so a list at the top of a blockquote is a
+    // level-1 list, which is what `sublist` compares against, and `consistent`
+    // is document-wide, so the style picked up inside a container carries out.
+    fn check_items<'a>(
         &self,
         root: &'a AstNode<'a>,
         path: &PathBuf,
         violations: &mut Vec<Violation>,
         maybe_list_char: &mut Option<char>,
         levels: &mut FxHashMap<usize, char>,
-        level: usize,
     ) {
-        for node in root.children() {
-            if let NodeValue::List(_) = node.data.borrow().value {
-                for item_node in node.children() {
-                    if let NodeValue::Item(NodeList {
-                        list_type: ListType::Bullet,
-                        bullet_char,
-                        ..
-                    }) = item_node.data.borrow().value
-                    {
-                        let is_violated = match &self.style {
-                            ListStyle::Consistent => maybe_list_char
-                                .is_some_and(|list_char| bullet_char as char != list_char),
-                            ListStyle::Asterisk => bullet_char != b'*',
-                            ListStyle::Plus => bullet_char != b'+',
-                            ListStyle::Dash => bullet_char != b'-',
-                            ListStyle::Sublist => levels
-                                .get(&level)
-                                .is_some_and(|list_char| bullet_char as char != *list_char),
-                        };
+        let mut depth = 0;
 
-                        if is_violated {
-                            let position = item_node.data.borrow().sourcepos;
-                            let violation = self.to_violation(path.clone(), position);
-                            violations.push(violation);
-                        }
-
-                        if maybe_list_char.is_none() {
-                            *maybe_list_char = Some(bullet_char as char);
-                        }
-
-                        if self.style == ListStyle::Sublist {
-                            levels.entry(level).or_insert(bullet_char as char);
-                        }
-                    }
-
-                    self.check_recursive(
-                        item_node,
-                        path,
-                        violations,
-                        maybe_list_char,
-                        levels,
-                        level + 1,
-                    );
+        for edge in root.traverse() {
+            let item_node = match edge {
+                NodeEdge::Start(node) if matches!(node.data.borrow().value, NodeValue::Item(_)) => {
+                    node
                 }
-            } else {
-                // A blockquote (or any other non-item container) can hold a list
-                // too. The level is left untouched: a list at the top of a
-                // blockquote is a level-1 list, which is what `sublist` compares
-                // against, and `consistent` is document-wide, so the style picked
-                // up inside the container carries back out.
-                self.check_recursive(node, path, violations, maybe_list_char, levels, level);
+                NodeEdge::End(node) if matches!(node.data.borrow().value, NodeValue::Item(_)) => {
+                    depth -= 1;
+                    continue;
+                }
+                _ => continue,
+            };
+            let level = depth + 1;
+            depth += 1;
+
+            if let NodeValue::Item(NodeList {
+                list_type: ListType::Bullet,
+                bullet_char,
+                ..
+            }) = item_node.data.borrow().value
+            {
+                let is_violated = match &self.style {
+                    ListStyle::Consistent => {
+                        maybe_list_char.is_some_and(|list_char| bullet_char as char != list_char)
+                    }
+                    ListStyle::Asterisk => bullet_char != b'*',
+                    ListStyle::Plus => bullet_char != b'+',
+                    ListStyle::Dash => bullet_char != b'-',
+                    ListStyle::Sublist => levels
+                        .get(&level)
+                        .is_some_and(|list_char| bullet_char as char != *list_char),
+                };
+
+                if is_violated {
+                    let position = item_node.data.borrow().sourcepos;
+                    violations.push(self.to_violation(path.clone(), position));
+                }
+
+                if maybe_list_char.is_none() {
+                    *maybe_list_char = Some(bullet_char as char);
+                }
+
+                if self.style == ListStyle::Sublist {
+                    levels.entry(level).or_insert(bullet_char as char);
+                }
             }
         }
     }
@@ -129,13 +129,12 @@ impl RuleLike for MD004 {
         let mut maybe_list_char = None;
         let mut levels = FxHashMap::default();
 
-        self.check_recursive(
+        self.check_items(
             doc.ast,
             &doc.path,
             &mut violations,
             &mut maybe_list_char,
             &mut levels,
-            1,
         );
 
         Ok(violations)
@@ -461,6 +460,17 @@ mod tests {
         let actual = rule.check(&doc)?;
         let expected = vec![];
         assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_does_not_overflow_the_stack_on_deeply_nested_blockquotes() -> Result<()> {
+        let text = ">".repeat(5000) + " * a";
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let actual = MD004::default().check(&doc)?;
+        assert_eq!(actual, vec![]);
         Ok(())
     }
 }

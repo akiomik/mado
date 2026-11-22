@@ -38,42 +38,43 @@ impl MD029 {
         Self { style }
     }
 
-    fn check_recursive<'a>(
+    // Iterative on purpose: recursing once per nested container overflows the
+    // stack on deeply nested blockquotes. Items are visited in document order,
+    // which also reaches lists inside blockquotes (`> 1. Foo`).
+    fn check_items<'a>(
         &self,
         root: &'a AstNode<'a>,
         path: &PathBuf,
         violations: &mut Vec<Violation>,
     ) {
-        for node in root.children() {
-            if let NodeValue::List(list) = node.data.borrow().value {
-                let mut maybe_prev_start = None;
+        for item_node in root.descendants() {
+            let NodeValue::Item(item) = item_node.data.borrow().value else {
+                continue;
+            };
+            let Some(parent) = item_node.parent() else {
+                continue;
+            };
+            let NodeValue::List(list) = parent.data.borrow().value else {
+                continue;
+            };
+            if list.list_type != ListType::Ordered {
+                continue;
+            }
 
-                for item_node in node.children() {
-                    if let NodeValue::Item(item) = item_node.data.borrow().value {
-                        if list.list_type == ListType::Ordered {
-                            let is_violated = match self.style {
-                                OrderedListStyle::One => item.start != 1,
-                                OrderedListStyle::Ordered => maybe_prev_start
-                                    .is_some_and(|prev_start| item.start != prev_start + 1),
-                            };
+            let is_violated = match self.style {
+                OrderedListStyle::One => item.start != 1,
+                OrderedListStyle::Ordered => item_node
+                    .previous_sibling()
+                    .and_then(|prev| match prev.data.borrow().value {
+                        NodeValue::Item(prev_item) => Some(prev_item.start),
+                        _ => None,
+                    })
+                    .is_some_and(|prev_start| item.start != prev_start + 1),
+            };
 
-                            if is_violated {
-                                let position = item_node.data.borrow().sourcepos;
-                                let violation = self.to_violation(path.clone(), position);
-                                violations.push(violation);
-                            }
-
-                            maybe_prev_start = Some(item.start);
-                        }
-
-                        self.check_recursive(item_node, path, violations);
-                    }
-                }
-            } else {
-                // Lists can also be reached through containers that are not list
-                // items, a blockquote being the common case. Descending into them
-                // keeps the rule from going silent on `> 1. Foo`.
-                self.check_recursive(node, path, violations);
+            if is_violated {
+                let position = item_node.data.borrow().sourcepos;
+                violations.push(self.to_violation(path.clone(), position));
             }
         }
     }
@@ -98,7 +99,7 @@ impl RuleLike for MD029 {
     fn check(&self, doc: &Document) -> Result<Vec<Violation>> {
         let mut violations = vec![];
 
-        self.check_recursive(doc.ast, &doc.path, &mut violations);
+        self.check_items(doc.ast, &doc.path, &mut violations);
 
         Ok(violations)
     }
@@ -286,6 +287,17 @@ mod tests {
         let actual = rule.check(&doc)?;
         let expected = vec![];
         assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn check_does_not_overflow_the_stack_on_deeply_nested_blockquotes() -> Result<()> {
+        let text = ">".repeat(5000) + " * a";
+        let path = Path::new("test.md").to_path_buf();
+        let arena = Arena::new();
+        let doc = Document::new(&arena, path, text)?;
+        let actual = MD029::default().check(&doc)?;
+        assert_eq!(actual, vec![]);
         Ok(())
     }
 }
