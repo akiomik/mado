@@ -13,7 +13,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@2026.11.02.1
+        uses: Homebrew/actions/setup-homebrew@2026.11.14.1
         with:
             stable: true
         env:
@@ -82,6 +82,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v7.0.1
-        - uses: cachix/install-nix-action@v31.11.3
+        - uses: cachix/install-nix-action@v31.11.5
         - run: nix build
         - run: nix flake check
